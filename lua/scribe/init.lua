@@ -84,7 +84,7 @@ function M.setup(opts)
 			"Scribe CLI binary not found. Please run the install script:\n"
 				.. "cd "
 				.. get_plugin_dir()
-				.. " && bash scripts/install.sh",
+				.. " && go build -o ../../bin/scribe-cli",
 			vim.log.levels.ERROR
 		)
 		return

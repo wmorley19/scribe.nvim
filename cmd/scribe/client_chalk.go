@@ -84,7 +84,7 @@ func (c *ChalkClient) doRequest(method, path string, body interface{}) ([]byte, 
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.SetBasicAuth(c.Username, c.APIToken)
+	req.Header.Set("Authorization", "Bearer"+c.APIToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
@@ -107,7 +107,7 @@ func (c *ChalkClient) doRequest(method, path string, body interface{}) ([]byte, 
 			wikiReqBody := bytes.NewBuffer(bodyData)
 			wikiReq, err := http.NewRequest(method, wikiURL, wikiReqBody)
 			if err == nil {
-				wikiReq.SetBasicAuth(c.Username, c.APIToken)
+				wikiReq.Header.Set("Authorization", "Bearer"+c.APIToken)
 				wikiReq.Header.Set("Content-Type", "application/json")
 				wikiReq.Header.Set("Accept", "application/json")
 				wikiResp, err := c.Client.Do(wikiReq)
