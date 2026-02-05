@@ -268,8 +268,8 @@ func (c *ChalkClient) SearchPages(spaceKey string, opts *ListOptions) ([]Page, e
 			offset = opts.Offset
 		}
 	}
-	params.Add("limit", fmt.Sprint("%d", limit))
-	params.Add("offset", fmt.Sprint("%d", offset))
+	params.Add("limit", fmt.Sprintf("%d", limit))
+	params.Add("offset", fmt.Sprintf("%d", offset))
 	endpoint := "/rest/api/content/search?" + params.Encode()
 	respBody, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
