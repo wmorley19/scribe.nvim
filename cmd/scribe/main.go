@@ -18,6 +18,7 @@ var (
 	parentID string
 	limit    int
 	offset   int
+	fetchAll bool
 )
 
 func main() {
@@ -39,6 +40,7 @@ func main() {
 		Short: "List all spaces",
 		RunE:  runListSpaces,
 	}
+	listSpacesCmd.Flags().BoolVar(&fetchAll, "all", false, "Fetch all spaces(streaming)")
 	listSpacesCmd.Flags().IntVar(&limit, "limit", 50, "Limit the number of results")
 	listSpacesCmd.Flags().IntVar(&offset, "offset", 0, "Starting offset for results")
 
@@ -86,6 +88,9 @@ func main() {
 		Short: "Search pages in a space",
 		RunE:  runSearchPages,
 	}
+	searchPagesCmd.Flags().BoolVar(&fetchAll, "all", false, "Fetch all pages (streaming)")
+	searchPagesCmd.Flags().IntVar(&limit, "limit", 50, "Limit for single page search")
+	searchPagesCmd.Flags().IntVar(&offset, "offset", 0, "Offset for single page search")
 	searchPagesCmd.Flags().StringVar(&spaceKey, "space", "", "Space key (required)")
 	searchPagesCmd.MarkFlagRequired("space")
 
@@ -100,7 +105,18 @@ func main() {
 }
 
 func runListSpaces(cmd *cobra.Command, args []string) error {
+
 	client := NewScribeClient()
+	if fetchAll {
+		spaces, err := client.ListAllSpaces()
+		if err != nil {
+			return err
+
+		}
+		for _, s := range spaces {
+			fmt.Printf("%s|%s\n", s.Key, s.Name)
+		}
+	}
 	opts := &ListOptions{
 		Limit:  limit,
 		Offset: offset,
@@ -208,6 +224,17 @@ func runGetPage(cmd *cobra.Command, args []string) error {
 
 func runSearchPages(cmd *cobra.Command, args []string) error {
 	client := NewScribeClient()
+	if fetchAll {
+		pages, err := client.SearchAllPages(spaceKey) // The looping function
+		if err != nil {
+			return err
+		}
+		for _, p := range pages {
+			// Print format: ID|TITLE
+			fmt.Printf("%s|%s\n", p.ID, p.Title)
+		}
+		return nil
+	}
 	opts := &ListOptions{
 		Limit:  limit,
 		Offset: offset,

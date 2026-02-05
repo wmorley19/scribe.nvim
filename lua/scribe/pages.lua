@@ -13,38 +13,51 @@ function M.list_pages()
 		M.show_pages_for_space(space.key)
 	end)
 end
-
 function M.show_pages_for_space(space_key)
-	utils.execute_cli({ "page", "search", "--space", space_key }, function(result, err)
-		if err then
-			vim.notify("Failed to list pages: " .. err, vim.log.levels.ERROR)
-			return
-		end
+	pickers
+		.new({}, {
+			prompt_title = "Pages in Space: " .. space_key .. " (Streaming)",
+			finder = finders.new_job(function()
+				-- Calls your Go CLI with the new --all flag
+				-- Command: scribe-cli page search --space SPACE_KEY --all
+				return { "scribe-cli", "page", "search", "--space", space_key, "--all" }
+			end, function(entry)
+				-- Parses the "ID|TITLE" format from your Go fmt.Printf
+				local id, title = entry:match("([^|]+)|(.+)")
+				if not id then
+					return nil
+				end
 
-		local pages = result.results or result
-		if #pages == 0 then
-			vim.notify("No pages found in space", vim.log.levels.INFO)
-			return
-		end
+				return {
+					value = id,
+					display = title,
+					ordinal = title,
+				}
+			end),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, map)
+				actions.select_default:replace(function()
+					local selection = action_state.get_selected_entry()
+					actions.close(prompt_bufnr)
 
-		pickers
-			.new({}, {
-				prompt_title = "Pages in Space: " .. space_key,
-				finder = finders.new_table({
-					results = pages,
-					entry_maker = function(entry)
-						local version = (entry.version and entry.version.number) or 0
-						return {
-							value = entry,
-							display = string.format("%s (v%d)", entry.title or "Untitled", version),
-							ordinal = entry.title or "Untitled",
-						}
-					end,
-				}),
-				sorter = conf.generic_sorter({}),
-			})
-			:find()
-	end)
+					if not selection then
+						return
+					end
+
+					-- Example: Get the page content and open it in a buffer
+					-- This likely calls your scribe-cli page get --id <id>
+					M.open_page(selection.value)
+				end)
+				return true
+			end,
+		})
+		:find()
+end
+
+-- Helper to actually pull the content once a page is selected
+function M.open_page(page_id)
+	vim.cmd("edit confluence://" .. page_id)
+	-- Your existing logic to populate the buffer with 'scribe-cli page get'
 end
 
 return M

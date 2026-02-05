@@ -2,10 +2,12 @@ package main
 
 type ScribeProvider interface {
 	ListSpaces(opts *ListOptions) ([]Space, error)
+	ListAllSpaces() ([]Space, error)
 	CreatePage(spaceKey, title, content, parentID string) (*Page, error)
 	GetPage(pageID string) (*Page, error)
 	UpdatePage(pageID, content string) (*Page, error)
 	SearchPages(spaceKey string, opts *ListOptions) ([]Page, error)
+	SearchAllPages(spaceKey string) ([]Page, error)
 }
 type ListOptions struct {
 	Limit  int

@@ -166,6 +166,33 @@ func (c *ConfluenceClient) ListSpaces(opts *ListOptions) ([]Space, error) {
 
 	return spacesResp.Results, nil
 }
+func (c *ConfluenceClient) ListAllSpaces() ([]Space, error) {
+	var allSpaces []Space
+	limit := 500
+	start := 0
+
+	for {
+		endpoint := fmt.Sprintf("/rest/api/space?limit=%d&start=%d", limit, start)
+		respBody, err := c.doRequest("GET", endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var spacesResp SpacesResponse
+		if err := json.Unmarshal(respBody, &spacesResp); err != nil {
+			return nil, err
+		}
+
+		allSpaces = append(allSpaces, spacesResp.Results...)
+
+		// If we got fewer than the limit, we're on the last page
+		if len(spacesResp.Results) < limit {
+			break
+		}
+		start += limit
+	}
+	return allSpaces, nil
+}
 
 func (c *ConfluenceClient) CreatePage(spaceKey, title, content, parentID string) (*Page, error) {
 	req := CreatePageRequest{
@@ -266,4 +293,34 @@ func (c *ConfluenceClient) SearchPages(spaceKey string, opts *ListOptions) ([]Pa
 	}
 
 	return pagesResp.Results, nil
+}
+
+// Fetch all pages in a space using CQL
+func (c *ConfluenceClient) SearchAllPages(spaceKey string) ([]Page, error) {
+	var allPages []Page
+	limit := 500
+	start := 0
+
+	for {
+		cql := url.QueryEscape(fmt.Sprintf("space = '%s' AND type = 'page'", spaceKey))
+		endpoint := fmt.Sprintf("/rest/api/content/search?cql=%s&limit=%d&start=%d", cql, limit, start)
+
+		respBody, err := c.doRequest("GET", endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var pagesResp PagesResponse
+		if err := json.Unmarshal(respBody, &pagesResp); err != nil {
+			return nil, err
+		}
+
+		allPages = append(allPages, pagesResp.Results...)
+
+		if len(pagesResp.Results) < limit {
+			break
+		}
+		start += limit
+	}
+	return allPages, nil
 }

@@ -140,7 +140,7 @@ func (c *ChalkClient) doRequest(method, path string, body interface{}) ([]byte, 
 }
 
 func (c *ChalkClient) ListSpaces(opts *ListOptions) ([]Space, error) {
-	limit := 20
+	limit := 10
 	offset := 0
 
 	if opts != nil {
@@ -163,6 +163,35 @@ func (c *ChalkClient) ListSpaces(opts *ListOptions) ([]Space, error) {
 	}
 
 	return spacesResp.Results, nil
+}
+
+// Fetch all spaces by looping through the pagination
+func (c *ChalkClient) ListAllSpaces() ([]Space, error) {
+	var allSpaces []Space
+	limit := 500 // Maximize batch size for speed
+	start := 0
+
+	for {
+		endpoint := fmt.Sprintf("/rest/api/space?limit=%d&start=%d", limit, start)
+		respBody, err := c.doRequest("GET", endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var spacesResp SpacesResponse
+		if err := json.Unmarshal(respBody, &spacesResp); err != nil {
+			return nil, err
+		}
+
+		allSpaces = append(allSpaces, spacesResp.Results...)
+
+		// If we got fewer than the limit, we're on the last page
+		if len(spacesResp.Results) < limit {
+			break
+		}
+		start += limit
+	}
+	return allSpaces, nil
 }
 
 func (c *ChalkClient) CreatePage(spaceKey, title, content, parentID string) (*Page, error) {
@@ -258,7 +287,7 @@ func (c *ChalkClient) SearchPages(spaceKey string, opts *ListOptions) ([]Page, e
 	params := url.Values{}
 	params.Add("cql", cqlQuery)
 
-	limit := 50
+	limit := 100
 	offset := 0
 	if opts != nil {
 		if opts.Limit > 0 {
@@ -282,4 +311,34 @@ func (c *ChalkClient) SearchPages(spaceKey string, opts *ListOptions) ([]Page, e
 	}
 
 	return pagesResp.Results, nil
+}
+
+// Fetch all pages in a space using CQL
+func (c *ChalkClient) SearchAllPages(spaceKey string) ([]Page, error) {
+	var allPages []Page
+	limit := 500
+	start := 0
+
+	for {
+		cql := url.QueryEscape(fmt.Sprintf("space = '%s' AND type = 'page'", spaceKey))
+		endpoint := fmt.Sprintf("/rest/api/content/search?cql=%s&limit=%d&start=%d", cql, limit, start)
+
+		respBody, err := c.doRequest("GET", endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var pagesResp PagesResponse
+		if err := json.Unmarshal(respBody, &pagesResp); err != nil {
+			return nil, err
+		}
+
+		allPages = append(allPages, pagesResp.Results...)
+
+		if len(pagesResp.Results) < limit {
+			break
+		}
+		start += limit
+	}
+	return allPages, nil
 }

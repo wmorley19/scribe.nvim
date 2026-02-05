@@ -103,87 +103,60 @@ function M.list_spaces()
 	end)
 end
 
--- offset: optional, for pagination. on_select: optional; when user picks a space, call on_select(space). If nil, default is show_pages_for_space.
-function M.search_all_spaces(offset, on_select)
-	offset = offset or 0
-	local limit = 50
+function M.search_all_spaces(on_select)
+	-- We no longer need 'offset' passed in because Go handles the loop
+	pickers
+		.new({}, {
+			prompt_title = "All Confluence Spaces (Streaming)",
+			finder = finders.new_job(function()
+				-- Calls your Go CLI with the new --all flag we added to main.go
+				return { "scribe-cli", "spaces", "list", "--all" }
+			end, function(entry)
+				-- Parses the "KEY|NAME" format from Go's fmt.Printf
+				local key, name = entry:match("([^|]+)|(.+)")
+				if not key then
+					return nil
+				end
 
-	vim.notify(string.format("Fetching spaces %d-%d...", offset, offset + limit), vim.log.levels.INFO)
+				return {
+					value = { key = key, name = name },
+					display = string.format("%s (%s)", name, key),
+					ordinal = name .. " " .. key,
+				}
+			end),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, map)
+				actions.select_default:replace(function()
+					local selection = action_state.get_selected_entry()
+					actions.close(prompt_bufnr)
 
-	utils.execute_cli(
-		{ "spaces", "list", "--limit", tostring(limit), "--offset", tostring(offset) },
-		function(result, err)
-			if err then
-				vim.notify("Failed to list spaces: " .. err, vim.log.levels.ERROR)
-				return
-			end
+					if not selection or not selection.value then
+						return
+					end
 
-			local entries = result.results or result
-			if type(entries) ~= "table" then
-				entries = {}
-			end
+					-- Standard save to favorites
+					utils.save_favorites(selection.value)
 
-			if #entries >= limit then
-				table.insert(entries, {
-					name = "➡️  Next Page...",
-					action = "next_page",
-					type = "system",
-				})
-			end
+					-- Callback logic
+					if on_select then
+						on_select(selection.value)
+					else
+						require("scribe.pages").show_pages_for_space(selection.value.key)
+					end
+				end)
 
-			pickers
-				.new({}, {
-					prompt_title = string.format("All Spaces (Offset: %d)", offset),
-					finder = finders.new_table({
-						results = entries,
-						entry_maker = function(entry)
-							if entry.action == "next_page" then
-								return {
-									value = entry,
-									display = entry.name,
-									ordinal = "zzzz",
-								}
-							end
-							return {
-								value = entry,
-								display = string.format("%s (%s) - %s", entry.name, entry.key, entry.type or "Space"),
-								ordinal = entry.name .. " " .. entry.key,
-							}
-						end,
-					}),
-					sorter = conf.generic_sorter({}),
-					attach_mappings = function(prompt_bufnr, map)
-						actions.select_default:replace(function()
-							local selection = action_state.get_selected_entry()
-							actions.close(prompt_bufnr)
-							if not selection or not selection.value then
-								return
-							end
-							if selection.value.action == "next_page" then
-								M.search_all_spaces(offset + limit, on_select)
-							elseif selection.value.key then
-								utils.save_favorites(selection.value)
-								if on_select then
-									on_select(selection.value)
-								else
-									require("scribe.pages").show_pages_for_space(selection.value.key)
-								end
-							end
-						end)
+				-- Keymap to save favorite without closing
+				map("i", "<A-a>", function()
+					local selection = action_state.get_selected_entry()
+					if selection and selection.value and selection.value.key then
+						utils.save_favorites(selection.value)
+						vim.notify("Saved " .. selection.value.name .. " to favorites")
+					end
+				end)
 
-						map("i", "<A-a>", function()
-							local selection = action_state.get_selected_entry()
-							if selection and selection.value and selection.value.key then
-								utils.save_favorites(selection.value)
-							end
-						end)
-
-						return true
-					end,
-				})
-				:find()
-		end
-	)
+				return true
+			end,
+		})
+		:find()
 end
-
 return M
