@@ -39,7 +39,7 @@ func main() {
 		Short: "List all spaces",
 		RunE:  runListSpaces,
 	}
-	listSpacesCmd.Flags().IntVar(&limit, "limit", 50, "Limit the number of results")
+	listSpacesCmd.Flags().IntVar(&limit, "limit", 100, "Limit the number of results")
 	listSpacesCmd.Flags().IntVar(&offset, "offset", 0, "Starting offset for results")
 
 	spacesCmd.AddCommand(listSpacesCmd)
