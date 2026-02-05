@@ -252,7 +252,7 @@ func (c *ChalkClient) SearchPages(spaceKey string, opts *ListOptions) ([]Page, e
 	if spaceKey == "" {
 		return nil, fmt.Errorf("space key cannot be empty")
 	}
-	cqlQuery := fmt.Sprintf("space = %q AND type \"page\" order by title", spaceKey)
+	cqlQuery := fmt.Sprintf("space = %q AND type = \"page\" order by title", spaceKey)
 	params := url.Values{}
 	params.Add("cql", cqlQuery)
 
