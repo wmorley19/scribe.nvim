@@ -252,8 +252,26 @@ func (c *ChalkClient) SearchPages(spaceKey string, opts *ListOptions) ([]Page, e
 	if spaceKey == "" {
 		return nil, fmt.Errorf("space key cannot be empty")
 	}
-	encodedSpaceKey := url.QueryEscape(spaceKey)
-	respBody, err := c.doRequest("GET", fmt.Sprintf("/rest/api/content?spaceKey=%s&limit=100&expand=version,space", encodedSpaceKey), nil)
+	cqlQuery := fmt.Sprintf("space = %q AND type = \"page\" order by title", spaceKey)
+
+	//encodedSpaceKey := url.QueryEscape(spaceKey)
+	params := url.Values{}
+	params.Add("cql", cqlQuery)
+
+	limit := 50
+	offset := 0
+	if opts != nil {
+		if opts.Limit > 0 {
+			limit = opts.Limit
+		}
+		if opts.Offset > 0 {
+			offset = opts.Offset
+		}
+	}
+	params.Add("limit", fmt.Sprint("%d", limit))
+	params.Add("offset", fmt.Sprint("%d", offset))
+	endpoint := "/rest/api/content/search?" + params.Encode()
+	respBody, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
