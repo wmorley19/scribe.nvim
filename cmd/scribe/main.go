@@ -111,11 +111,11 @@ func runListSpaces(cmd *cobra.Command, args []string) error {
 		spaces, err := client.ListAllSpaces()
 		if err != nil {
 			return err
-
 		}
 		for _, s := range spaces {
 			fmt.Printf("%s|%s\n", s.Key, s.Name)
 		}
+		return nil
 	}
 	opts := &ListOptions{
 		Limit:  limit,

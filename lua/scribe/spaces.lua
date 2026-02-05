@@ -78,37 +78,60 @@ function M.list_spaces()
 end
 
 function M.search_all_spaces(on_select)
-	pickers
-		.new({}, {
-			prompt_title = "Streaming All Spaces",
-			finder = finders.new_job({ "scribe-cli", "spaces", "list", "--all" }, function(entry)
-				local key, name = entry:match("([^|]+)|(.+)")
-				if not key then
-					return nil
-				end
-				return { value = { key = key, name = name }, display = name .. " (" .. key .. ")", ordinal = name }
-			end),
-			sorter = conf.generic_sorter({}),
-			attach_mappings = function(prompt_bufnr)
-				actions.select_default:replace(function()
-					local selection = action_state.get_selected_entry()
-					actions.close(prompt_bufnr)
-					if not selection then
-						return
-					end
+	utils.execute_cli({ "spaces", "list", "--all" }, function(result, err)
+		if err then
+			vim.notify("Failed to list spaces: " .. err, vim.log.levels.ERROR)
+			return
+		end
 
-					utils.save_favorites(selection.value)
-					if on_select then
-						on_select(selection.value)
-					else
-						-- CRITICAL: Pass the .key (string), not the table
-						require("scribe.pages").show_pages_for_space(selection.value.key)
-					end
-				end)
-				return true
-			end,
-		})
-		:find()
+		local entries
+		if type(result) == "string" then
+			-- Streaming output from Go CLI (key|name per line)
+			entries = utils.parse_streaming_lines(result, "spaces")
+		else
+			entries = result.results or result
+		end
+		if type(entries) ~= "table" then
+			entries = {}
+		end
+
+		pickers
+			.new({}, {
+				prompt_title = "All Spaces",
+				finder = finders.new_table({
+					results = entries,
+					entry_maker = function(entry)
+						local name = entry.name or "?"
+						local key = entry.key or "?"
+						local typ = entry.type or "Space"
+						return {
+							value = entry,
+							display = string.format("%s (%s) - %s", name, key, typ),
+							ordinal = name .. " " .. key,
+						}
+					end,
+				}),
+				sorter = conf.generic_sorter({}),
+				attach_mappings = function(prompt_bufnr)
+					actions.select_default:replace(function()
+						local selection = action_state.get_selected_entry()
+						actions.close(prompt_bufnr)
+						if not selection or not selection.value then
+							return
+						end
+
+						utils.save_favorites(selection.value)
+						if on_select then
+							on_select(selection.value)
+						else
+							require("scribe.pages").show_pages_for_space(selection.value.key)
+						end
+					end)
+					return true
+				end,
+			})
+			:find()
+	end)
 end
 
 return M

@@ -92,14 +92,19 @@ function M.select_parent_page(space_key, callback)
 		return
 	end
 
-	utils.execute_cli({ "page", "search", "--space", space_key }, function(result, err)
+	utils.execute_cli({ "page", "search", "--space", space_key, "--all" }, function(result, err)
 		if err then
 			vim.notify("Failed to list pages: " .. err, vim.log.levels.ERROR)
 			callback(nil)
 			return
 		end
 
-		local pages = result.results or result
+		local pages
+		if type(result) == "string" then
+			pages = utils.parse_streaming_lines(result, "pages")
+		else
+			pages = result.results or result
+		end
 		if not pages or #pages == 0 then
 			vim.notify("No pages found in space", vim.log.levels.INFO)
 			callback(nil)

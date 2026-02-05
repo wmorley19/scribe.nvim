@@ -170,6 +170,31 @@ function M.is_markdown()
 	return ft == "markdown" or ft == "md"
 end
 
+-- Parse streaming line format from Go CLI: "key|name" or "id|title" per line.
+-- Returns a table of entries suitable for result.results (spaces: {key, name}; pages: {id, title}).
+function M.parse_streaming_lines(stdout_data, kind)
+	if type(stdout_data) ~= "string" or stdout_data == "" then
+		return {}
+	end
+	local results = {}
+	for _, line in ipairs(vim.split(stdout_data, "\n")) do
+		line = vim.trim(line)
+		if line == "" then
+			goto continue
+		end
+		local a, b = line:match("^([^|]+)|(.+)$")
+		if a and b then
+			if kind == "spaces" then
+				table.insert(results, { key = vim.trim(a), name = vim.trim(b) })
+			elseif kind == "pages" then
+				table.insert(results, { id = vim.trim(a), title = vim.trim(b) })
+			end
+		end
+		::continue::
+	end
+	return results
+end
+
 -- Join Confluence/Scribe base URL with webui path
 function M.join_scribe_url(base_url, webui_path)
 	if not webui_path or webui_path == "" then
