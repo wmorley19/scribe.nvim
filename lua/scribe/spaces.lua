@@ -10,50 +10,37 @@ local action_state = require("telescope.actions.state")
 local function build_favorites_results()
 	local data = utils.get_favorites()
 	local results = {}
+	local seen = {} -- Tracking set to prevent duplicates
+
 	if type(data) ~= "table" then
 		data = { favorites = {}, recent = {} }
 	end
-	if data and data.favorites then
-		for _, space in ipairs(data.favorites) do
+
+	-- 1. Process Favorites
+	for _, space in ipairs(data.favorites or {}) do
+		if space.key and not seen[space.key] then
 			space.is_fav = true
 			table.insert(results, space)
-		end
-		for _, space in ipairs(data.recent or {}) do
-			local exists = false
-			for _, res in ipairs(results) do
-				if res.key == space.key then
-					exists = true
-					break
-				end
-			end
-			if not exists then
-				table.insert(results, space)
-			end
+			seen[space.key] = true
 		end
 	end
-	if data and data.recent then
-		for _, space in ipairs(data.recent) do
-			local exists = false
-			for _, res in ipairs(results) do
-				if res.key == space.key then
-					exists = true
-					break
-				end
-			end
-			if not exists then
-				table.insert(results, space)
-			end
+
+	-- 2. Process Recent (only add if not already in favorites)
+	for _, space in ipairs(data.recent or {}) do
+		if space.key and not seen[space.key] then
+			table.insert(results, space)
+			seen[space.key] = true
 		end
 	end
+
 	table.insert(results, {
 		name = "🔍 Search All Confluence Spaces...",
 		action = "search_all",
 	})
+
 	return results
 end
 
--- Show favorites + "Search All" picker; when a space is chosen, call callback(space).
--- Use this from Pull, Push, Pages, or any flow that needs "pick a space (favorites first)".
 function M.select_space_with_favorites(callback)
 	local results = build_favorites_results()
 	pickers
@@ -62,19 +49,18 @@ function M.select_space_with_favorites(callback)
 			finder = finders.new_table({
 				results = results,
 				entry_maker = function(entry)
-					if entry.key then
-						return {
-							value = entry,
-							display = "⭐ " .. entry.name .. " (" .. entry.key .. ")",
-							ordinal = entry.name .. " " .. entry.key,
-						}
-					else
+					if entry.action == "search_all" then
 						return {
 							value = entry,
 							display = entry.name,
-							ordinal = "zzzz",
+							ordinal = "zzzz", -- Keep at bottom
 						}
 					end
+					return {
+						value = entry,
+						display = (entry.is_fav and "⭐ " or "🕒 ") .. entry.name .. " (" .. entry.key .. ")",
+						ordinal = entry.name .. " " .. entry.key,
+					}
 				end,
 			}),
 			sorter = conf.generic_sorter({}),
@@ -82,11 +68,13 @@ function M.select_space_with_favorites(callback)
 				actions.select_default:replace(function()
 					local selection = action_state.get_selected_entry()
 					actions.close(prompt_bufnr)
+
 					if not selection or not selection.value then
 						return
 					end
+
 					if selection.value.action == "search_all" then
-						M.search_all_spaces(0, callback)
+						M.search_all_spaces(callback)
 					elseif selection.value.key then
 						callback(selection.value)
 					end
@@ -96,7 +84,6 @@ function M.select_space_with_favorites(callback)
 		})
 		:find()
 end
-
 function M.list_spaces()
 	M.select_space_with_favorites(function(space)
 		require("scribe.pages").show_pages_for_space(space.key)

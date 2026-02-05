@@ -43,10 +43,9 @@ function M.show_pages_for_space(space_key)
 					if not selection then
 						return
 					end
-
-					-- Example: Get the page content and open it in a buffer
-					-- This likely calls your scribe-cli page get --id <id>
-					M.open_page(selection.value)
+					if selection and selection.value then
+						M.open_page(selection.value)
+					end
 				end)
 				return true
 			end,
@@ -56,6 +55,10 @@ end
 
 -- Helper to actually pull the content once a page is selected
 function M.open_page(page_id)
+	if type(page_id) ~= "string" then
+		vim.notify("Error: page_id is not a string", vim.log.levels.ERROR)
+		return
+	end
 	vim.cmd("edit confluence://" .. page_id)
 	-- Your existing logic to populate the buffer with 'scribe-cli page get'
 end
