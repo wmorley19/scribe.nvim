@@ -170,15 +170,20 @@ function M.is_markdown()
 	return ft == "markdown" or ft == "md"
 end
 
--- Join Confluence URL with webui path
+-- Join Confluence/Scribe base URL with webui path
 function M.join_scribe_url(base_url, webui_path)
 	if not webui_path or webui_path == "" then
-		return base_url
+		return base_url or ""
 	end
 
 	-- If webui is already a full URL, use it
 	if webui_path:match("^https?://") then
 		return webui_path
+	end
+
+	-- Guard against nil base_url (e.g. config not set)
+	if not base_url or base_url == "" then
+		return webui_path:match("^/") and webui_path or ("/" .. webui_path)
 	end
 
 	-- Remove trailing slashes from base URL

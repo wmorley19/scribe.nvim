@@ -68,6 +68,15 @@ function M.select_space_with_favorites(callback)
 		:find()
 end
 
+-- ScribeSpaces command: pick a space (favorites first), then show pages for that space
+function M.list_spaces()
+	M.select_space_with_favorites(function(space)
+		if space and space.key then
+			require("scribe.pages").show_pages_for_space(space.key)
+		end
+	end)
+end
+
 function M.search_all_spaces(on_select)
 	pickers
 		.new({}, {

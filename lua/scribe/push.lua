@@ -74,10 +74,12 @@ function M.push_current_file()
 				})
 
 				-- Open in browser
-				local open_cmd = vim.fn.has("mac") == 1 and "open" or "xdg-open"
 				local webui = (result._links and result._links.webui) or (result._link and result._link.webui) or ""
-				local url = utils.join_confluence_url(require("scribe").config.confluence_url, webui)
-				vim.fn.system(string.format("%s '%s'", open_cmd, url))
+				local url = utils.join_scribe_url(require("scribe").config.scribe_url, webui)
+				if url and url ~= "" then
+					local open_cmd = vim.fn.has("mac") == 1 and "open" or "xdg-open"
+					vim.fn.system(string.format("%s '%s'", open_cmd, url))
+				end
 			end)
 		end)
 	end)

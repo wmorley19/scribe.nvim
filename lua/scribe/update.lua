@@ -40,13 +40,13 @@ function M.update_current_file()
 
 		vim.notify("Page updated successfully!", vim.log.levels.INFO)
 
-		-- Open in browser
-		local open_cmd = vim.fn.has("mac") == 1 and "open" or "xdg-open"
+		-- Open in browser if we have a URL
 		local webui = (result._links and result._links.webui) or (result._link and result._link.webui) or ""
 		local url = utils.join_scribe_url(require("scribe").config.scribe_url, webui)
-
-		vim.notify("Updating Confluence page...", vim.log.levels.INFO)
-		vim.fn.system(string.format("%s '%s'", open_cmd, url))
+		if url and url ~= "" then
+			local open_cmd = vim.fn.has("mac") == 1 and "open" or "xdg-open"
+			vim.fn.system(string.format("%s '%s'", open_cmd, url))
+		end
 	end)
 end
 

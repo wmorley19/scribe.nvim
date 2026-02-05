@@ -1,6 +1,20 @@
 local M = {}
--- ... other requires ...
+local utils = require("scribe.utils")
+local pickers = require("telescope.pickers")
+local finders = require("telescope.finders")
+local conf = require("telescope.config").values
+local actions = require("telescope.actions")
+local action_state = require("telescope.actions.state")
 local spaces = require("scribe.spaces")
+
+-- ScribePages command: pick a space (favorites first), then show pages for that space
+function M.list_pages()
+	spaces.select_space_with_favorites(function(space)
+		if space and space.key then
+			M.show_pages_for_space(space.key)
+		end
+	end)
+end
 
 function M.show_pages_for_space(space_key)
 	-- Safety check: ensure space_key is a string

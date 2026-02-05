@@ -35,24 +35,28 @@ M.check = function()
 
 	health.ok("CLI binary found and executable: " .. cli_path)
 
-	-- Check configuration
-	if scribe.config.confluence_url == "" then
-		health.warn("CONFLUENCE_URL not set")
+	-- Check configuration (support both scribe_* and confluence_* keys)
+	local base_url = scribe.config.scribe_url or scribe.config.confluence_url or ""
+	local username = scribe.config.scribe_username or scribe.config.confluence_username or ""
+	local api_token = scribe.config.scribe_api_token or scribe.config.confluence_api_token or ""
+
+	if base_url == "" then
+		health.warn("SCRIBE_URL / CONFLUENCE_URL not set")
 		health.info("Set environment variable or pass in setup()")
 	else
-		health.ok("Confluence URL configured: " .. scribe.config.confluence_url)
+		health.ok("URL configured: " .. base_url)
 	end
 
-	if scribe.config.confluence_username == "" then
-		health.warn("CONFLUENCE_USERNAME not set")
+	if username == "" then
+		health.warn("SCRIBE_USERNAME / CONFLUENCE_USERNAME not set")
 	else
-		health.ok("Confluence username configured")
+		health.ok("Username configured")
 	end
 
-	if scribe.config.confluence_api_token == "" then
-		health.warn("CONFLUENCE_API_TOKEN not set")
+	if api_token == "" then
+		health.warn("SCRIBE_API_TOKEN / CONFLUENCE_API_TOKEN not set")
 	else
-		health.ok("Confluence API token configured")
+		health.ok("API token configured")
 	end
 
 	-- Check dependencies
