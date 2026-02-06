@@ -9,16 +9,27 @@ local spaces = require("scribe.spaces")
 
 function M.list_pages()
 	spaces.select_space_with_favorites(function(space)
+		if not space or not space.key then
+			return
+		end
 		M.show_pages_picker(space.key)
 	end)
 end
 
 -- Show picker: favorite/recent pages for this space first, then "Search / Browse..." option.
 function M.show_pages_picker(space_key)
+	if not space_key or type(space_key) ~= "string" then
+		vim.notify("Pages: invalid space key", vim.log.levels.ERROR)
+		return
+	end
 	local saved = utils.get_pages_for_space(space_key)
 	local results = {}
-	for _, p in ipairs(saved) do
-		table.insert(results, p)
+	if type(saved) == "table" then
+		for _, p in ipairs(saved) do
+			if p and (p.id or p.title) then
+				table.insert(results, p)
+			end
+		end
 	end
 	table.insert(results, {
 		action = "search",
@@ -38,10 +49,13 @@ function M.show_pages_picker(space_key)
 			finder = finders.new_table({
 				results = results,
 				entry_maker = function(entry)
+					if not entry or type(entry) ~= "table" then
+						return { value = {}, display = "?", ordinal = "?" }
+					end
 					if entry.action == "search" then
 						return {
 							value = entry,
-							display = entry.name,
+							display = entry.name or "🔍 Search / Browse all pages...",
 							ordinal = "zzzz",
 						}
 					end
@@ -109,8 +123,12 @@ function M.show_pages_for_space(space_key, offset, query)
 			vim.notify("Failed to list pages: " .. err, vim.log.levels.ERROR)
 			return
 		end
+		if not result then
+			vim.notify("No response from CLI", vim.log.levels.ERROR)
+			return
+		end
 
-		local pages = result.results or result
+		local pages = (result.results and type(result.results) == "table" and result.results) or (type(result) == "table" and result) or {}
 		if type(pages) ~= "table" then
 			pages = {}
 		end
@@ -137,14 +155,17 @@ function M.show_pages_for_space(space_key, offset, query)
 				finder = finders.new_table({
 					results = pages,
 					entry_maker = function(entry)
+						if not entry or type(entry) ~= "table" then
+							return { value = {}, display = "?", ordinal = "?" }
+						end
 						if entry.action == "next_page" then
 							return {
 								value = entry,
-								display = entry.name,
+								display = entry.name or "➡️  Next Page...",
 								ordinal = "zzzz",
 							}
 						end
-						local version = (entry.version and entry.version.number) or 0
+						local version = (entry.version and type(entry.version) == "table" and entry.version.number) or 0
 						return {
 							value = entry,
 							display = string.format("%s (v%d)", entry.title or "Untitled", version),
@@ -195,11 +216,16 @@ function M.open_page(page_obj)
 	if not page_obj or not page_obj.id then
 		return
 	end
-	local webui = (page_obj._links and page_obj._links.webui) or (page_obj._link and page_obj._link.webui)
+	local webui = (page_obj._links and type(page_obj._links) == "table" and page_obj._links.webui)
+		or (page_obj._link and type(page_obj._link) == "table" and page_obj._link.webui)
 	if not webui or webui == "" then
-		webui = "/pages/viewpage.action?pageId=" .. page_obj.id
+		webui = "/pages/viewpage.action?pageId=" .. tostring(page_obj.id)
 	end
 	local config = require("scribe").config
+	if not config then
+		vim.notify("Scribe config not found", vim.log.levels.ERROR)
+		return
+	end
 	local url = utils.join_scribe_url(config.scribe_url, webui)
 	if url and url ~= "" then
 		local open_cmd = vim.fn.has("mac") == 1 and "open" or "xdg-open"

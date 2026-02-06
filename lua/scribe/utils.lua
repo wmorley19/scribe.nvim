@@ -42,8 +42,11 @@ end
 
 --Save Favorites to local file
 function M.save_favorites(space_obj)
+	if not space_obj or type(space_obj) ~= "table" or not space_obj.key then
+		return
+	end
 	local data = M.get_favorites()
-
+	data.recent = type(data.recent) == "table" and data.recent or {}
 	table.insert(data.recent, 1, space_obj)
 	if #data.recent > 10 then
 		table.remove(data.recent)
@@ -54,18 +57,21 @@ end
 -- Return favorite + recent pages for a space (favorites first, then recent, deduped by id). Each entry has id, title, space_key, _links or webui.
 function M.get_pages_for_space(space_key)
 	local data = M.get_favorites()
-	local fav = data.favorite_pages or {}
-	local rec = data.recent_pages or {}
+	if not data or type(data) ~= "table" then
+		return {}
+	end
+	local fav = type(data.favorite_pages) == "table" and data.favorite_pages or {}
+	local rec = type(data.recent_pages) == "table" and data.recent_pages or {}
 	local seen = {}
 	local out = {}
 	for _, p in ipairs(fav) do
-		if p.space_key == space_key and p.id and not seen[p.id] then
+		if type(p) == "table" and p.space_key == space_key and p.id and not seen[p.id] then
 			seen[p.id] = true
 			table.insert(out, p)
 		end
 	end
 	for _, p in ipairs(rec) do
-		if p.space_key == space_key and p.id and not seen[p.id] then
+		if type(p) == "table" and p.space_key == space_key and p.id and not seen[p.id] then
 			seen[p.id] = true
 			table.insert(out, p)
 		end
@@ -77,17 +83,28 @@ end
 function M.save_recent_page(page_obj, space_key)
 	if not page_obj or not page_obj.id then return end
 	local data = M.get_favorites()
-	local rec = data.recent_pages or {}
+	if not data or type(data) ~= "table" then return end
+	local rec = type(data.recent_pages) == "table" and data.recent_pages or {}
+	local space_val = space_key
+	if not space_val and type(page_obj.space) == "table" and page_obj.space.key then
+		space_val = page_obj.space.key
+	end
+	local _links = nil
+	if type(page_obj._links) == "table" and page_obj._links.webui then
+		_links = { webui = page_obj._links.webui }
+	elseif type(page_obj.Links) == "table" and page_obj.Links.WebUI then
+		_links = { webui = page_obj.Links.WebUI }
+	end
 	local entry = {
-		id = page_obj.id,
+		id = tostring(page_obj.id),
 		title = page_obj.title or "Untitled",
-		space_key = space_key or (page_obj.space and page_obj.space.key),
-		_links = page_obj._links or (page_obj.Links and { webui = page_obj.Links.WebUI }) or nil,
+		space_key = space_val,
+		_links = _links,
 	}
 	-- Prepend and dedupe by id
 	local new_rec = { entry }
 	for _, p in ipairs(rec) do
-		if p.id ~= entry.id then
+		if type(p) == "table" and p.id ~= entry.id then
 			table.insert(new_rec, p)
 		end
 	end
@@ -100,15 +117,26 @@ end
 function M.add_page_favorite(page_obj, space_key)
 	if not page_obj or not page_obj.id then return end
 	local data = M.get_favorites()
-	local fav = data.favorite_pages or {}
+	if not data or type(data) ~= "table" then return end
+	local fav = type(data.favorite_pages) == "table" and data.favorite_pages or {}
+	local space_val = space_key
+	if not space_val and type(page_obj.space) == "table" and page_obj.space.key then
+		space_val = page_obj.space.key
+	end
+	local _links = nil
+	if type(page_obj._links) == "table" and page_obj._links.webui then
+		_links = { webui = page_obj._links.webui }
+	elseif type(page_obj.Links) == "table" and page_obj.Links.WebUI then
+		_links = { webui = page_obj.Links.WebUI }
+	end
 	local entry = {
-		id = page_obj.id,
+		id = tostring(page_obj.id),
 		title = page_obj.title or "Untitled",
-		space_key = space_key or (page_obj.space and page_obj.space.key),
-		_links = page_obj._links or (page_obj.Links and { webui = page_obj.Links.WebUI }) or nil,
+		space_key = space_val,
+		_links = _links,
 	}
-	for i, p in ipairs(fav) do
-		if p.id == entry.id then return end
+	for _, p in ipairs(fav) do
+		if type(p) == "table" and p.id == entry.id then return end
 	end
 	table.insert(fav, 1, entry)
 	data.favorite_pages = fav
@@ -251,15 +279,18 @@ end
 
 -- Join Confluence URL with webui path
 function M.join_scribe_url(base_url, webui_path)
-	if not webui_path or webui_path == "" then
-		return base_url
+	webui_path = (webui_path and tostring(webui_path)) or ""
+	if webui_path == "" then
+		return (base_url and tostring(base_url)) or ""
 	end
-
 	-- If webui is already a full URL, use it
 	if webui_path:match("^https?://") then
 		return webui_path
 	end
-
+	base_url = (base_url and tostring(base_url)) or ""
+	if base_url == "" then
+		return webui_path
+	end
 	-- Remove trailing slashes from base URL
 	base_url = base_url:gsub("/+$", "")
 	if not webui_path:match("^/wiki/") and webui_path:match("^/spaces/") then
