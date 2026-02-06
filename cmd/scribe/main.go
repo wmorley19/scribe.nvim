@@ -18,6 +18,7 @@ var (
 	parentID string
 	limit    int
 	offset   int
+	query    string
 )
 
 func main() {
@@ -88,6 +89,7 @@ func main() {
 	}
 	searchPagesCmd.Flags().StringVar(&spaceKey, "space", "", "Space key (required)")
 	searchPagesCmd.MarkFlagRequired("space")
+	searchPagesCmd.Flags().StringVar(&query, "query", "", "Filter pages by title (CQL contains); empty = all")
 	searchPagesCmd.Flags().IntVar(&limit, "limit", 100, "Limit the number of results")
 	searchPagesCmd.Flags().IntVar(&offset, "offset", 0, "Starting offset for results")
 
@@ -213,6 +215,7 @@ func runSearchPages(cmd *cobra.Command, args []string) error {
 	opts := &ListOptions{
 		Limit:  limit,
 		Offset: offset,
+		Query:  strings.TrimSpace(query),
 	}
 
 	pages, err := client.SearchPages(spaceKey, opts)

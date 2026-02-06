@@ -10,6 +10,7 @@ type ScribeProvider interface {
 type ListOptions struct {
 	Limit  int
 	Offset int
+	Query  string // optional title search (CQL: title ~ "query")
 }
 type Space struct {
 	ID   int    `json:"id"`

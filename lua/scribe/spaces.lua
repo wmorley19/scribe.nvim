@@ -128,6 +128,7 @@ function M.search_all_spaces(offset, on_select)
 					name = "➡️  Next Page...",
 					action = "next_page",
 					type = "system",
+					ordinal = "zzzz",
 				})
 			end
 

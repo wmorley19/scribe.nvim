@@ -9,94 +9,182 @@ local spaces = require("scribe.spaces")
 
 function M.list_pages()
 	spaces.select_space_with_favorites(function(space)
-		M.show_pages_for_space(space.key)
+		M.show_pages_picker(space.key)
 	end)
 end
 
-function M.show_pages_for_space(space_key, offset)
+-- Show picker: favorite/recent pages for this space first, then "Search / Browse..." option.
+function M.show_pages_picker(space_key)
+	local saved = utils.get_pages_for_space(space_key)
+	local results = {}
+	for _, p in ipairs(saved) do
+		table.insert(results, p)
+	end
+	table.insert(results, {
+		action = "search",
+		name = "🔍 Search / Browse all pages...",
+		ordinal = "zzzz",
+	})
+
+	if #results == 1 then
+		-- Only "Search..." - go straight to query prompt
+		M.prompt_then_show_pages(space_key)
+		return
+	end
+
+	pickers
+		.new({}, {
+			prompt_title = "Pages in " .. space_key,
+			finder = finders.new_table({
+				results = results,
+				entry_maker = function(entry)
+					if entry.action == "search" then
+						return {
+							value = entry,
+							display = entry.name,
+							ordinal = "zzzz",
+						}
+					end
+					return {
+						value = entry,
+						display = "⭐ " .. (entry.title or "Untitled"),
+						ordinal = entry.title or "Untitled",
+					}
+				end,
+			}),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, map)
+				actions.select_default:replace(function()
+					local selection = action_state.get_selected_entry()
+					actions.close(prompt_bufnr)
+					if not selection or not selection.value then
+						return
+					end
+					if selection.value.action == "search" then
+						M.prompt_then_show_pages(space_key)
+					elseif selection.value.id then
+						utils.save_recent_page(selection.value, space_key)
+						M.open_page(selection.value)
+					end
+				end)
+				-- Alt-a: add selected page to favorites (if it's a page)
+				map("i", "<A-a>", function()
+					local selection = action_state.get_selected_entry()
+					if selection and selection.value and selection.value.id then
+						utils.add_page_favorite(selection.value, space_key)
+						vim.notify("Page added to favorites", vim.log.levels.INFO)
+					end
+				end)
+				return true
+			end,
+		})
+		:find()
+end
+
+-- Prompt for query (Enter = blank = all pages), then show paginated list.
+function M.prompt_then_show_pages(space_key)
+	local query = vim.fn.input("Query (Enter = all pages): ")
+	if query == nil then
+		query = ""
+	end
+	query = vim.trim(query)
+	M.show_pages_for_space(space_key, 0, query)
+end
+
+function M.show_pages_for_space(space_key, offset, query)
 	offset = offset or 0
-	local limit = 50
+	query = query or ""
+	local limit = 100
+
+	local args = {
+		"page", "search", "--space", space_key,
+		"--query", query,
+		"--limit", tostring(limit),
+		"--offset", tostring(offset),
+	}
 
 	vim.notify(string.format("Fetching pages %d-%d...", offset + 1, offset + limit), vim.log.levels.INFO)
-	utils.execute_cli(
-		{ "page", "search", "--space", space_key, "--limit", tostring(limit), "--offset", tostring(offset) },
-		function(result, err)
-			if err then
-				vim.notify("Failed to list pages: " .. err, vim.log.levels.ERROR)
-				return
-			end
+	utils.execute_cli(args, function(result, err)
+		if err then
+			vim.notify("Failed to list pages: " .. err, vim.log.levels.ERROR)
+			return
+		end
 
-			local pages = result.results or result
-			if type(pages) ~= "table" then
-				pages = {}
-			end
-			if #pages == 0 then
-				vim.notify("No pages found in space", vim.log.levels.INFO)
-				return
-			end
-			if #pages >= limit then
-				table.insert(pages, {
-					name = "➡️  Next Page...",
-					action = "next_page",
-					type = "system",
-				})
-			end
+		local pages = result.results or result
+		if type(pages) ~= "table" then
+			pages = {}
+		end
+		if #pages == 0 then
+			vim.notify("No pages found in space", vim.log.levels.INFO)
+			return
+		end
+		if #pages >= limit then
+			table.insert(pages, {
+				name = "➡️  Next Page...",
+				action = "next_page",
+				type = "system",
+			})
+		end
 
-			-- Capture for closures
-			local current_offset = offset
-			local current_limit = limit
-			local current_space_key = space_key
+		local current_offset = offset
+		local current_limit = limit
+		local current_space_key = space_key
+		local current_query = query
 
-			pickers
-				.new({}, {
-					prompt_title = "Pages in " .. current_space_key,
-					finder = finders.new_table({
-						results = pages,
-						entry_maker = function(entry)
-							if entry.action == "next_page" then
-								return {
-									value = entry,
-									display = entry.name,
-									ordinal = "zzzz",
-								}
-							end
-							local version = (entry.version and entry.version.number) or 0
+		pickers
+			.new({}, {
+				prompt_title = "Pages in " .. current_space_key,
+				finder = finders.new_table({
+					results = pages,
+					entry_maker = function(entry)
+						if entry.action == "next_page" then
 							return {
 								value = entry,
-								display = string.format("%s (v%d)", entry.title or "Untitled", version),
-								ordinal = entry.title or "Untitled",
+								display = entry.name,
+								ordinal = "zzzz",
 							}
-						end,
-					}),
-					sorter = conf.generic_sorter({}),
-					attach_mappings = function(prompt_bufnr, map)
-						actions.select_default:replace(function()
-							local selection = action_state.get_selected_entry()
-							actions.close(prompt_bufnr)
-							if not selection or not selection.value then
-								return
-							end
-							if selection.value.action == "next_page" then
-								M.show_pages_for_space(current_space_key, current_offset + current_limit)
-							elseif selection.value.id or selection.value.title then
-								-- It's a page: add space to recent, then open the page
-								utils.save_favorites({ key = current_space_key })
-								M.open_page(selection.value)
-							end
-						end)
+						end
+						local version = (entry.version and entry.version.number) or 0
+						return {
+							value = entry,
+							display = string.format("%s (v%d)", entry.title or "Untitled", version),
+							ordinal = entry.title or "Untitled",
+						}
+					end,
+				}),
+				sorter = conf.generic_sorter({}),
+				attach_mappings = function(prompt_bufnr, map)
+					actions.select_default:replace(function()
+						local selection = action_state.get_selected_entry()
+						actions.close(prompt_bufnr)
+						if not selection or not selection.value then
+							return
+						end
+						if selection.value.action == "next_page" then
+							M.show_pages_for_space(current_space_key, current_offset + current_limit, current_query)
+						elseif selection.value.id or selection.value.title then
+							utils.save_favorites({ key = current_space_key })
+							utils.save_recent_page(selection.value, current_space_key)
+							M.open_page(selection.value)
+						end
+					end)
 
-						-- Alt-a: add current space to recent (favorites) without opening a page
-						map("i", "<A-a>", function()
+					map("i", "<A-a>", function()
+						local selection = action_state.get_selected_entry()
+						if selection and selection.value and (selection.value.id or selection.value.title) then
+							utils.add_page_favorite(selection.value, current_space_key)
+							vim.notify("Page added to favorites", vim.log.levels.INFO)
+						else
 							utils.save_favorites({ key = current_space_key })
 							vim.notify("Space " .. current_space_key .. " added to recent", vim.log.levels.INFO)
-						end)
+						end
+					end)
 
-						return true
-					end,
-				})
-				:find()
-		end
-	)
+					return true
+				end,
+			})
+			:find()
+	end)
 end
 
 -- Open a page in the browser. page_obj can have _links.webui or id (and optionally title).

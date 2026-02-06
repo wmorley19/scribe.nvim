@@ -3,24 +3,40 @@ local data_path = vim.fn.stdpath("data") .. "/scribe_favs.json"
 -- Read Favs.json to help manage large document stores
 function M.get_favorites()
 	if vim.fn.filereadable(data_path) == 0 then
-		return { favorites = {}, recent = {} }
+		return { favorites = {}, recent = {}, favorite_pages = {}, recent_pages = {} }
 	end
 	local file = io.open(data_path, "r")
 	if not file then
-		return { favorites = {}, recent = {} }
+		return { favorites = {}, recent = {}, favorite_pages = {}, recent_pages = {} }
 	end
 	local content = file:read("*all")
 	file:close()
 	if content == "" or content == nil then
-		return { favorites = {}, recent = {} }
+		return { favorites = {}, recent = {}, favorite_pages = {}, recent_pages = {} }
 	end
 	local success, decoded = pcall(vim.json.decode, content)
 	if success and type(decoded) == "table" then
 		decoded.favorites = decoded.favorites or {}
 		decoded.recent = decoded.recent or {}
+		decoded.favorite_pages = decoded.favorite_pages or {}
+		decoded.recent_pages = decoded.recent_pages or {}
 		return decoded
 	else
-		return { favorites = {}, recent = {} }
+		return { favorites = {}, recent = {}, favorite_pages = {}, recent_pages = {} }
+	end
+end
+
+-- Write back full favorites data (spaces + pages)
+local function write_favorites(data)
+	data = data or M.get_favorites()
+	data.favorites = data.favorites or {}
+	data.recent = data.recent or {}
+	data.favorite_pages = data.favorite_pages or {}
+	data.recent_pages = data.recent_pages or {}
+	local file = io.open(data_path, "w")
+	if file then
+		file:write(vim.json.encode(data))
+		file:close()
 	end
 end
 
@@ -32,10 +48,73 @@ function M.save_favorites(space_obj)
 	if #data.recent > 10 then
 		table.remove(data.recent)
 	end
-	local file = io.open(data_path, "w")
-	file:write(vim.json.encode(data))
-	file:close()
+	write_favorites(data)
 end
+
+-- Return favorite + recent pages for a space (favorites first, then recent, deduped by id). Each entry has id, title, space_key, _links or webui.
+function M.get_pages_for_space(space_key)
+	local data = M.get_favorites()
+	local fav = data.favorite_pages or {}
+	local rec = data.recent_pages or {}
+	local seen = {}
+	local out = {}
+	for _, p in ipairs(fav) do
+		if p.space_key == space_key and p.id and not seen[p.id] then
+			seen[p.id] = true
+			table.insert(out, p)
+		end
+	end
+	for _, p in ipairs(rec) do
+		if p.space_key == space_key and p.id and not seen[p.id] then
+			seen[p.id] = true
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+-- Add page to recent (when opened). Keeps last 30 per space or global.
+function M.save_recent_page(page_obj, space_key)
+	if not page_obj or not page_obj.id then return end
+	local data = M.get_favorites()
+	local rec = data.recent_pages or {}
+	local entry = {
+		id = page_obj.id,
+		title = page_obj.title or "Untitled",
+		space_key = space_key or (page_obj.space and page_obj.space.key),
+		_links = page_obj._links or (page_obj.Links and { webui = page_obj.Links.WebUI }) or nil,
+	}
+	-- Prepend and dedupe by id
+	local new_rec = { entry }
+	for _, p in ipairs(rec) do
+		if p.id ~= entry.id then
+			table.insert(new_rec, p)
+		end
+	end
+	while #new_rec > 30 do table.remove(new_rec) end
+	data.recent_pages = new_rec
+	write_favorites(data)
+end
+
+-- Add page to favorites (starred). Dedupe by id.
+function M.add_page_favorite(page_obj, space_key)
+	if not page_obj or not page_obj.id then return end
+	local data = M.get_favorites()
+	local fav = data.favorite_pages or {}
+	local entry = {
+		id = page_obj.id,
+		title = page_obj.title or "Untitled",
+		space_key = space_key or (page_obj.space and page_obj.space.key),
+		_links = page_obj._links or (page_obj.Links and { webui = page_obj.Links.WebUI }) or nil,
+	}
+	for i, p in ipairs(fav) do
+		if p.id == entry.id then return end
+	end
+	table.insert(fav, 1, entry)
+	data.favorite_pages = fav
+	write_favorites(data)
+end
+
 -- Execute confluence-cli command and return parsed JSON
 function M.execute_cli(args, callback)
 	local config = require("scribe").config
