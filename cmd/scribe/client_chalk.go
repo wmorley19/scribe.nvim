@@ -257,17 +257,17 @@ func (c *ChalkClient) SearchPages(spaceKey string, opts *ListOptions) ([]Page, e
 	params.Add("cql", cqlQuery)
 
 	limit := 100
-	offset := 0
+	start := 0
 	if opts != nil {
 		if opts.Limit > 0 {
 			limit = opts.Limit
 		}
-		if opts.Offset > 0 {
-			offset = opts.Offset
+		if opts.Offset >= 0 {
+			start = opts.Offset
 		}
 	}
 	params.Add("limit", fmt.Sprintf("%d", limit))
-	params.Add("offset", fmt.Sprintf("%d", offset))
+	params.Add("start", fmt.Sprintf("%d", start))
 	endpoint := "/rest/api/content/search?" + params.Encode()
 	respBody, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
