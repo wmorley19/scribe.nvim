@@ -12,12 +12,13 @@ function M.list_pages()
 		if not space or not space.key then
 			return
 		end
-		M.show_pages_picker(space.key)
+		M.show_pages_picker(space.key, nil) -- nil = open in browser
 	end)
 end
 
--- Show picker: favorite/recent pages for this space first, then "Search / Browse..." option.
-function M.show_pages_picker(space_key)
+-- Show picker: favorite/recent pages for this space first, then "Search…" option.
+-- on_page_select: optional function(page). If nil, selected page is opened in browser.
+function M.show_pages_picker(space_key, on_page_select)
 	if not space_key or type(space_key) ~= "string" then
 		vim.notify("Pages: invalid space key", vim.log.levels.ERROR)
 		return
@@ -33,13 +34,12 @@ function M.show_pages_picker(space_key)
 	end
 	table.insert(results, {
 		action = "search",
-		name = "🔍 Search / Browse all pages...",
+		name = "🔍 Search…",
 		ordinal = "zzzz",
 	})
 
 	if #results == 1 then
-		-- Only "Search..." - go straight to query prompt
-		M.prompt_then_show_pages(space_key)
+		M.prompt_then_show_pages(space_key, on_page_select)
 		return
 	end
 
@@ -55,7 +55,7 @@ function M.show_pages_picker(space_key)
 					if entry.action == "search" then
 						return {
 							value = entry,
-							display = entry.name or "🔍 Search / Browse all pages...",
+							display = entry.name or "🔍 Search…",
 							ordinal = "zzzz",
 						}
 					end
@@ -75,10 +75,14 @@ function M.show_pages_picker(space_key)
 						return
 					end
 					if selection.value.action == "search" then
-						M.prompt_then_show_pages(space_key)
+						M.prompt_then_show_pages(space_key, on_page_select)
 					elseif selection.value.id then
 						utils.save_recent_page(selection.value, space_key)
-						M.open_page(selection.value)
+						if on_page_select then
+							on_page_select(selection.value)
+						else
+							M.open_page(selection.value)
+						end
 					end
 				end)
 				-- Alt-a: add selected page to favorites (if it's a page)
@@ -96,16 +100,16 @@ function M.show_pages_picker(space_key)
 end
 
 -- Prompt for query (Enter = blank = all pages), then show paginated list.
-function M.prompt_then_show_pages(space_key)
+function M.prompt_then_show_pages(space_key, on_page_select)
 	local query = vim.fn.input("Query (Enter = all pages): ")
 	if query == nil then
 		query = ""
 	end
 	query = vim.trim(query)
-	M.show_pages_for_space(space_key, 0, query)
+	M.show_pages_for_space(space_key, 0, query, on_page_select)
 end
 
-function M.show_pages_for_space(space_key, offset, query)
+function M.show_pages_for_space(space_key, offset, query, on_page_select)
 	offset = offset or 0
 	query = query or ""
 	local limit = 100
@@ -148,6 +152,7 @@ function M.show_pages_for_space(space_key, offset, query)
 		local current_limit = limit
 		local current_space_key = space_key
 		local current_query = query
+		local current_on_select = on_page_select
 
 		pickers
 			.new({}, {
@@ -182,11 +187,15 @@ function M.show_pages_for_space(space_key, offset, query)
 							return
 						end
 						if selection.value.action == "next_page" then
-							M.show_pages_for_space(current_space_key, current_offset + current_limit, current_query)
+							M.show_pages_for_space(current_space_key, current_offset + current_limit, current_query, current_on_select)
 						elseif selection.value.id or selection.value.title then
 							utils.save_favorites({ key = current_space_key })
 							utils.save_recent_page(selection.value, current_space_key)
-							M.open_page(selection.value)
+							if current_on_select then
+								current_on_select(selection.value)
+							else
+								M.open_page(selection.value)
+							end
 						end
 					end)
 

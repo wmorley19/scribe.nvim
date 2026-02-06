@@ -46,7 +46,7 @@ local function build_favorites_results()
 		end
 	end
 	table.insert(results, {
-		name = "🔍 Search All Confluence Spaces...",
+		name = "🔍 Search…",
 		action = "search_all",
 	})
 	return results

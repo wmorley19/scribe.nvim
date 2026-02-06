@@ -68,6 +68,8 @@ M.config = {
 	scribe_username = vim.env.SCRIBE_USERNAME or "",
 	scribe_api_token = vim.env.SCRIBE_API_TOKEN or "",
 	template_path = nil, -- Path to custom template file (optional)
+	-- Set to true for Chalk / backends where page URLs should not use /wiki prefix
+	scribe_no_wiki = false,
 }
 
 function M.setup(opts)

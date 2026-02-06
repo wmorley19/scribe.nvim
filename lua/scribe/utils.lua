@@ -293,7 +293,10 @@ function M.join_scribe_url(base_url, webui_path)
 	end
 	-- Remove trailing slashes from base URL
 	base_url = base_url:gsub("/+$", "")
-	if not webui_path:match("^/wiki/") and webui_path:match("^/spaces/") then
+	-- Chalk and some backends: do not add /wiki prefix when opening pages
+	local config = require("scribe").config
+	local no_wiki = config and config.scribe_no_wiki
+	if not no_wiki and not webui_path:match("^/wiki/") and webui_path:match("^/spaces/") then
 		webui_path = "/wiki" .. webui_path
 	end
 
