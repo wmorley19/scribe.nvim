@@ -23,7 +23,7 @@ var (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "scribe-cli",
-		Short: "Docuementation CLI for Neovim integration",
+		Short: "Documentation CLI for Neovim integration",
 	}
 
 	// Get credentials from environment variables
@@ -88,6 +88,8 @@ func main() {
 	}
 	searchPagesCmd.Flags().StringVar(&spaceKey, "space", "", "Space key (required)")
 	searchPagesCmd.MarkFlagRequired("space")
+	searchPagesCmd.Flags().IntVar(&limit, "limit", 100, "Limit the number of results")
+	searchPagesCmd.Flags().IntVar(&offset, "offset", 0, "Starting offset for results")
 
 	pagesCmd.AddCommand(createPageCmd, updatePageCmd, getPageCmd, searchPagesCmd)
 
