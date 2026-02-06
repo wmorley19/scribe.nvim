@@ -62,16 +62,21 @@ function M.select_space_with_favorites(callback)
 			finder = finders.new_table({
 				results = results,
 				entry_maker = function(entry)
-					if entry.key then
+					if not entry or type(entry) ~= "table" then
+						return { value = {}, display = "?", ordinal = "?" }
+					end
+					local name = entry.name or "?"
+					local key = entry.key or ""
+					if key ~= "" then
 						return {
 							value = entry,
-							display = "⭐ " .. entry.name .. " (" .. entry.key .. ")",
-							ordinal = entry.name .. " " .. entry.key,
+							display = "⭐ " .. name .. " (" .. key .. ")",
+							ordinal = name .. " " .. key,
 						}
 					else
 						return {
 							value = entry,
-							display = entry.name,
+							display = name,
 							ordinal = "zzzz",
 						}
 					end
@@ -138,17 +143,22 @@ function M.search_all_spaces(offset, on_select)
 					finder = finders.new_table({
 						results = entries,
 						entry_maker = function(entry)
+							if not entry or type(entry) ~= "table" then
+								return { value = {}, display = "?", ordinal = "?" }
+							end
 							if entry.action == "next_page" then
 								return {
 									value = entry,
-									display = entry.name,
+									display = entry.name or "➡️  Next Page...",
 									ordinal = "zzzz",
 								}
 							end
+							local name = entry.name or "?"
+							local key = entry.key or "?"
 							return {
 								value = entry,
-								display = string.format("%s (%s) - %s", entry.name, entry.key, entry.type or "Space"),
-								ordinal = entry.name .. " " .. entry.key,
+								display = string.format("%s (%s) - %s", name, key, entry.type or "Space"),
+								ordinal = name .. " " .. key,
 							}
 						end,
 					}),
