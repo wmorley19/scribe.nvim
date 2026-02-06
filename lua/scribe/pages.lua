@@ -27,7 +27,7 @@ function M.show_pages_picker(space_key, on_page_select)
 	local results = {}
 	if type(saved) == "table" then
 		for _, p in ipairs(saved) do
-			if p and (p.id or p.title) then
+			if p and (p.id or p.title) and p.action ~= "search" then
 				table.insert(results, p)
 			end
 		end

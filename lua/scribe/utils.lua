@@ -40,9 +40,12 @@ local function write_favorites(data)
 	end
 end
 
---Save Favorites to local file
+--Save Favorites to local file (never save the "Search" placeholder)
 function M.save_favorites(space_obj)
 	if not space_obj or type(space_obj) ~= "table" or not space_obj.key then
+		return
+	end
+	if space_obj.action == "search_all" or space_obj.action == "search" then
 		return
 	end
 	local data = M.get_favorites()
@@ -79,9 +82,10 @@ function M.get_pages_for_space(space_key)
 	return out
 end
 
--- Add page to recent (when opened). Keeps last 30 per space or global.
+-- Add page to recent (when opened). Keeps last 30. Never save the "Search" placeholder.
 function M.save_recent_page(page_obj, space_key)
 	if not page_obj or not page_obj.id then return end
+	if page_obj.action == "search" or page_obj.action == "next_page" then return end
 	local data = M.get_favorites()
 	if not data or type(data) ~= "table" then return end
 	local rec = type(data.recent_pages) == "table" and data.recent_pages or {}
@@ -113,9 +117,10 @@ function M.save_recent_page(page_obj, space_key)
 	write_favorites(data)
 end
 
--- Add page to favorites (starred). Dedupe by id.
+-- Add page to favorites (starred). Dedupe by id. Never save the "Search" placeholder.
 function M.add_page_favorite(page_obj, space_key)
 	if not page_obj or not page_obj.id then return end
+	if page_obj.action == "search" or page_obj.action == "next_page" then return end
 	local data = M.get_favorites()
 	if not data or type(data) ~= "table" then return end
 	local fav = type(data.favorite_pages) == "table" and data.favorite_pages or {}

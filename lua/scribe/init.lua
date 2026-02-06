@@ -101,6 +101,9 @@ function M.setup(opts)
 	vim.env.SCRIBE_URL = M.config.scribe_url
 	vim.env.SCRIBE_USERNAME = M.config.scribe_username
 	vim.env.SCRIBE_API_TOKEN = M.config.scribe_api_token
+	if M.config.scribe_no_wiki then
+		vim.env.SCRIBE_PROVIDER = "chalk"
+	end
 
 	-- Validate configuration
 	if M.config.scribe_url == "" or M.config.scribe_api_token == "" then

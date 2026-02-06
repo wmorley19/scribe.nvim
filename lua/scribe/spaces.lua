@@ -6,45 +6,45 @@ local conf = require("telescope.config").values
 local actions = require("telescope.actions")
 local action_state = require("telescope.actions.state")
 
--- Build favorites + recent list and add "Search All" button. Used by both list_spaces and select_space_with_favorites.
+-- Build favorites + recent list and one "Search…" entry at the end. Skip any stored search placeholder.
 local function build_favorites_results()
 	local data = utils.get_favorites()
 	local results = {}
 	if type(data) ~= "table" then
 		data = { favorites = {}, recent = {} }
 	end
-	if data and data.favorites then
-		for _, space in ipairs(data.favorites) do
-			space.is_fav = true
+	local function is_real_space(space)
+		if not space or type(space) ~= "table" then return false end
+		if space.action == "search_all" or space.action == "search" then return false end
+		return space.key and space.key ~= ""
+	end
+	local function add_space(space)
+		if not is_real_space(space) then return end
+		local exists = false
+		for _, res in ipairs(results) do
+			if res.key == space.key then exists = true break end
+		end
+		if not exists then
 			table.insert(results, space)
 		end
-		for _, space in ipairs(data.recent or {}) do
-			local exists = false
-			for _, res in ipairs(results) do
-				if res.key == space.key then
-					exists = true
-					break
-				end
-			end
-			if not exists then
+	end
+	if data and data.favorites then
+		for _, space in ipairs(data.favorites) do
+			if is_real_space(space) then
+				space.is_fav = true
 				table.insert(results, space)
 			end
+		end
+		for _, space in ipairs(data.recent or {}) do
+			add_space(space)
 		end
 	end
 	if data and data.recent then
 		for _, space in ipairs(data.recent) do
-			local exists = false
-			for _, res in ipairs(results) do
-				if res.key == space.key then
-					exists = true
-					break
-				end
-			end
-			if not exists then
-				table.insert(results, space)
-			end
+			add_space(space)
 		end
 	end
+	-- Single search entry at the end
 	table.insert(results, {
 		name = "🔍 Search…",
 		action = "search_all",

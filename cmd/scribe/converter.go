@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"regexp"
 	"strings"
 )
@@ -89,7 +90,14 @@ func ConvertMarkdownToConfluence(markdown string) string {
 		}
 	}
 
-	return strings.Join(result, "\n")
+	out := strings.Join(result, "\n")
+
+	// Chalk / Confluence Data Center 9.x can reject self-closing tags; use explicit close.
+	if os.Getenv("SCRIBE_PROVIDER") == "chalk" {
+		out = strings.ReplaceAll(out, "<hr/>", "<hr></hr>")
+	}
+
+	return out
 }
 
 func convertUnorderedLists(content string) string {
