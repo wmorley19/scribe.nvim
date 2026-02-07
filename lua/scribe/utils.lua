@@ -84,10 +84,16 @@ end
 
 -- Add page to recent (when opened). Keeps last 30. Never save the "Search" placeholder.
 function M.save_recent_page(page_obj, space_key)
-	if not page_obj or not page_obj.id then return end
-	if page_obj.action == "search" or page_obj.action == "next_page" then return end
+	if not page_obj or not page_obj.id then
+		return
+	end
+	if page_obj.action == "search" or page_obj.action == "next_page" then
+		return
+	end
 	local data = M.get_favorites()
-	if not data or type(data) ~= "table" then return end
+	if not data or type(data) ~= "table" then
+		return
+	end
 	local rec = type(data.recent_pages) == "table" and data.recent_pages or {}
 	local space_val = space_key
 	if not space_val and type(page_obj.space) == "table" and page_obj.space.key then
@@ -112,17 +118,25 @@ function M.save_recent_page(page_obj, space_key)
 			table.insert(new_rec, p)
 		end
 	end
-	while #new_rec > 30 do table.remove(new_rec) end
+	while #new_rec > 30 do
+		table.remove(new_rec)
+	end
 	data.recent_pages = new_rec
 	write_favorites(data)
 end
 
 -- Add page to favorites (starred). Dedupe by id. Never save the "Search" placeholder.
 function M.add_page_favorite(page_obj, space_key)
-	if not page_obj or not page_obj.id then return end
-	if page_obj.action == "search" or page_obj.action == "next_page" then return end
+	if not page_obj or not page_obj.id then
+		return
+	end
+	if page_obj.action == "search" or page_obj.action == "next_page" then
+		return
+	end
 	local data = M.get_favorites()
-	if not data or type(data) ~= "table" then return end
+	if not data or type(data) ~= "table" then
+		return
+	end
 	local fav = type(data.favorite_pages) == "table" and data.favorite_pages or {}
 	local space_val = space_key
 	if not space_val and type(page_obj.space) == "table" and page_obj.space.key then
@@ -141,7 +155,9 @@ function M.add_page_favorite(page_obj, space_key)
 		_links = _links,
 	}
 	for _, p in ipairs(fav) do
-		if type(p) == "table" and p.id == entry.id then return end
+		if type(p) == "table" and p.id == entry.id then
+			return
+		end
 	end
 	table.insert(fav, 1, entry)
 	data.favorite_pages = fav
@@ -293,24 +309,17 @@ function M.join_scribe_url(base_url, webui_path)
 		return webui_path
 	end
 	base_url = (base_url and tostring(base_url)) or ""
-	if base_url == "" then
-		return webui_path
-	end
-	-- Remove trailing slashes from base URL
 	base_url = base_url:gsub("/+$", "")
-	-- Chalk and some backends: do not add /wiki prefix when opening pages
+	if not webui_path:match("^/") then
+		webui_path = "/" .. webui_path
+	end
 	local config = require("scribe").config
 	local no_wiki = config and config.scribe_no_wiki
-	if not no_wiki and not webui_path:match("^/wiki/") and webui_path:match("^/spaces/") then
+
+	if not no_wiki and not webui_path:match("^/wiki") then
 		webui_path = "/wiki" .. webui_path
 	end
-
-	-- Join paths properly
-	if webui_path:match("^/") then
-		return base_url .. webui_path
-	else
-		return base_url .. "/" .. webui_path
-	end
+	return base_url .. webui_path
 end
 
 return M
