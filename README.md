@@ -1,6 +1,8 @@
 # scribe.nvim
 > Push and pull your documentation pages directly from Neovim
- ** Current supposr for Confluence Cloud and Confluence Data 9.2 **
+
+ ** Current support for Confluence Cloud and Confluence Data 9.2 **
+
 A Neovim plugin that integrates with Atlassian Confluence, allowing you to create, update, and manage your documentation using Markdown - all from your terminal.
 
 ![Neovim Version](https://img.shields.io/badge/Neovim-0.8%2B-green.svg)
