@@ -73,7 +73,14 @@ M.config = {
 }
 
 function M.setup(opts)
+	local env_provider = vim.env.SCRIBE_PROVIDER or ""
+	if env_provider:lower() == "chalk" then
+		M.config.scribe_no_wiki = true
+	end
 	M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+	if M.config.scribe_no_wiki then
+		vim.env.SCRIBE_PROVIDER = "chalk"
+	end
 
 	-- Auto-detect CLI binary if not specified
 	if not M.config.scribe_cli_path or M.config.scribe_cli_path == "" then

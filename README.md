@@ -35,7 +35,7 @@
   },
     build = "cd cmd/scribe && go build -o ../../bin/scribe-cli .",
   config = function()
-    require("scribe").setup({})
+    require("scribe").setup{}
   end,
 }
 ```
@@ -51,7 +51,7 @@ use {
   },
         build = "cd cmd/scribe && go build -o ../../bin/scribe-cli .",
   config = function()
-    require("scribe").setup({})
+    require("scribe").setup{}
   end,
 }
 ```
