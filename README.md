@@ -1,6 +1,6 @@
 # scribe.nvim
-** Push and pull your documentation pages directly from Neovim **
-> Current support for Confluence Cloud and Confluence Data 9.2 **
+## Push and pull your documentation pages directly from Neovim
+> Current support for Confluence Cloud and Confluence Data 9.2
 
 ![Neovim Version](https://img.shields.io/badge/Neovim-0.8%2B-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
