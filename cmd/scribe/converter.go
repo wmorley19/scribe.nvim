@@ -1,207 +1,132 @@
 package main
 
 import (
-	"os"
+	"bytes"
+	"fmt"
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/JohannesKaufmann/html-to-markdown/plugin"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
 	"regexp"
 	"strings"
 )
 
-// stripFrontmatter removes YAML frontmatter from markdown content
+// ConvertMarkdownToConfluence uses Goldmark to generate strict XHTML
+func ConvertMarkdownToConfluence(markdown string) string {
+	content := stripFrontmatter(markdown)
+
+	// 1. Configure Goldmark for Confluence compatibility
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.GFM), // GitHub Flavored Markdown (tables, strikethrough)
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+		),
+		goldmark.WithRendererOptions(
+			html.WithXHTML(),  // CRITICAL: Generates <br/>, <hr/>, <img ... /> for Data Center validity
+			html.WithUnsafe(), // Allow raw HTML (in case user manually added macros)
+		),
+	)
+
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(content), &buf); err != nil {
+		// Fallback to raw content if conversion fails (rare)
+		return content
+	}
+
+	xhtml := buf.String()
+
+	// Goldmark guarantees the structure is predictable.
+	xhtml = regexp.MustCompile(`(?s)<pre><code class="language-(\w+)">(.+?)</code></pre>`).ReplaceAllStringFunc(xhtml, func(match string) string {
+		parts := regexp.MustCompile(`(?s)<pre><code class="language-(\w+)">(.+?)</code></pre>`).FindStringSubmatch(match)
+		lang := parts[1]
+		code := parts[2]
+		// Unescape HTML entities inside code block so they show up correctly in the macro
+		code = strings.ReplaceAll(code, "&lt;", "<")
+		code = strings.ReplaceAll(code, "&gt;", ">")
+		code = strings.ReplaceAll(code, "&amp;", "&")
+
+		return fmt.Sprintf(`<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">%s</ac:parameter><ac:plain-text-body><![CDATA[%s]]></ac:plain-text-body></ac:structured-macro>`, lang, code)
+	})
+
+	// Handle generic code blocks (no language specified)
+	xhtml = regexp.MustCompile(`(?s)<pre><code>(.+?)</code></pre>`).ReplaceAllStringFunc(xhtml, func(match string) string {
+		parts := regexp.MustCompile(`(?s)<pre><code>(.+?)</code></pre>`).FindStringSubmatch(match)
+		code := parts[1]
+		code = strings.ReplaceAll(code, "&lt;", "<")
+		code = strings.ReplaceAll(code, "&gt;", ">")
+		code = strings.ReplaceAll(code, "&amp;", "&")
+
+		return fmt.Sprintf(`<ac:structured-macro ac:name="code"><ac:plain-text-body><![CDATA[%s]]></ac:plain-text-body></ac:structured-macro>`, code)
+	})
+
+	return xhtml
+}
+
+// ConvertConfluenceToMarkdown uses html-to-markdown for robust parsing
+func ConvertConfluenceToMarkdown(confluence string) string {
+	converter := htmltomarkdown.NewConverter("", true, nil)
+
+	// Use GFM plugin (tables, strikethrough)
+	converter.Use(plugin.GitHubFlavored())
+
+	// 1. CUSTOM RULE: Handle Confluence Code Macros
+	// Confluence stores code in <ac:structured-macro ac:name="code">...
+	converter.AddRules(htmltomarkdown.Rule{
+		Filter: []string{"ac:structured-macro"},
+		Replacement: func(content string, selec *goquery.Selection, opt *htmltomarkdown.Options) *string {
+			// Check if it's a code block
+			if selec.AttrOr("ac:name", "") == "code" {
+				// Get language
+				lang := selec.Find("ac\\:parameter[ac\\:name='language']").Text()
+
+				// Get code content (inside CDATA usually, but parsed as text by goquery)
+				code := selec.Find("ac\\:plain-text-body").Text()
+
+				// Return standard Markdown code block
+				block := fmt.Sprintf("\n```%s\n%s\n```\n", lang, code)
+				return &block
+			}
+			// If it's not a code block, just return the inner content text (or strip it)
+			// Returning nil lets other rules handle it, but here we likely want to just render text
+			text := selec.Text()
+			return &text
+		},
+	})
+
+	// Confluence uses <ri:attachment ri:filename="image.png" /> inside <ac:image>
+	converter.AddRules(htmltomarkdown.Rule{
+		Filter: []string{"ac:image"},
+		Replacement: func(content string, selec *goquery.Selection, opt *htmltomarkdown.Options) *string {
+			filename := selec.Find("ri\\:attachment").AttrOr("ri:filename", "")
+			if filename != "" {
+				image := fmt.Sprintf("![%s](%s)", filename, filename)
+				return &image
+			}
+			return nil
+		},
+	})
+
+	markdown, err := converter.ConvertString(confluence)
+	if err != nil {
+		// Fallback to simple regex if library fails
+		return confluence
+	}
+
+	return strings.TrimSpace(markdown)
+}
+
 func stripFrontmatter(content string) string {
 	lines := strings.Split(content, "\n")
 	if len(lines) < 3 || lines[0] != "---" {
-		return content // No frontmatter
+		return content
 	}
-
-	// Find the end of frontmatter
 	for i := 1; i < len(lines); i++ {
 		if lines[i] == "---" {
-			// Return content after frontmatter
 			return strings.Join(lines[i+1:], "\n")
 		}
 	}
-
-	return content // No closing --- found, return as-is
-}
-
-// ConvertMarkdownToConfluence converts Markdown to Confluence Storage Format
-func ConvertMarkdownToConfluence(markdown string) string {
-	// Strip frontmatter before conversion
-	content := stripFrontmatter(markdown)
-
-	// Headers
-	content = regexp.MustCompile(`(?m)^# (.+)$`).ReplaceAllString(content, "<h1>$1</h1>")
-	content = regexp.MustCompile(`(?m)^## (.+)$`).ReplaceAllString(content, "<h2>$1</h2>")
-	content = regexp.MustCompile(`(?m)^### (.+)$`).ReplaceAllString(content, "<h3>$1</h3>")
-	content = regexp.MustCompile(`(?m)^#### (.+)$`).ReplaceAllString(content, "<h4>$1</h4>")
-	content = regexp.MustCompile(`(?m)^##### (.+)$`).ReplaceAllString(content, "<h5>$1</h5>")
-	content = regexp.MustCompile(`(?m)^###### (.+)$`).ReplaceAllString(content, "<h6>$1</h6>")
-
-	// Bold
-	content = regexp.MustCompile(`\*\*(.+?)\*\*`).ReplaceAllString(content, "<strong>$1</strong>")
-	content = regexp.MustCompile(`__(.+?)__`).ReplaceAllString(content, "<strong>$1</strong>")
-
-	// Italic
-	content = regexp.MustCompile(`\*(.+?)\*`).ReplaceAllString(content, "<em>$1</em>")
-	content = regexp.MustCompile(`_(.+?)_`).ReplaceAllString(content, "<em>$1</em>")
-
-	// Code blocks
-	content = regexp.MustCompile("(?s)```(\\w+)?\\n(.+?)```").ReplaceAllStringFunc(content, func(match string) string {
-		parts := regexp.MustCompile("(?s)```(\\w+)?\\n(.+?)```").FindStringSubmatch(match)
-		lang := parts[1]
-		code := parts[2]
-		if lang == "" {
-			lang = "none"
-		}
-		return `<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">` + lang + `</ac:parameter><ac:plain-text-body><![CDATA[` + code + `]]></ac:plain-text-body></ac:structured-macro>`
-	})
-
-	// Inline code
-	content = regexp.MustCompile("`(.+?)`").ReplaceAllString(content, "<code>$1</code>")
-
-	// Links
-	content = regexp.MustCompile(`\[(.+?)\]\((.+?)\)`).ReplaceAllString(content, `<a href="$2">$1</a>`)
-
-	// Unordered lists
-	content = convertUnorderedLists(content)
-
-	// Ordered lists
-	content = convertOrderedLists(content)
-
-	// Blockquotes
-	content = regexp.MustCompile(`(?m)^> (.+)$`).ReplaceAllString(content, "<blockquote><p>$1</p></blockquote>")
-
-	// Horizontal rule
-	content = regexp.MustCompile(`(?m)^---$`).ReplaceAllString(content, "<hr/>")
-
-	// Paragraphs (wrap non-tag lines)
-	lines := strings.Split(content, "\n")
-	var result []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		// Don't wrap if it's already an HTML tag
-		if !strings.HasPrefix(trimmed, "<") {
-			result = append(result, "<p>"+trimmed+"</p>")
-		} else {
-			result = append(result, trimmed)
-		}
-	}
-
-	out := strings.Join(result, "\n")
-
-	// Chalk / Confluence Data Center 9.x can reject self-closing tags; use explicit close.
-	if os.Getenv("SCRIBE_PROVIDER") == "chalk" {
-		out = strings.ReplaceAll(out, "<hr/>", "<hr></hr>")
-	}
-
-	return out
-}
-
-func convertUnorderedLists(content string) string {
-	lines := strings.Split(content, "\n")
-	var result []string
-	inList := false
-
-	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "- ") || strings.HasPrefix(strings.TrimSpace(line), "* ") {
-			if !inList {
-				result = append(result, "<ul>")
-				inList = true
-			}
-			text := strings.TrimSpace(line[2:])
-			result = append(result, "<li>"+text+"</li>")
-		} else {
-			if inList {
-				result = append(result, "</ul>")
-				inList = false
-			}
-			result = append(result, line)
-		}
-	}
-	if inList {
-		result = append(result, "</ul>")
-	}
-
-	return strings.Join(result, "\n")
-}
-
-func convertOrderedLists(content string) string {
-	lines := strings.Split(content, "\n")
-	var result []string
-	inList := false
-
-	for _, line := range lines {
-		matched := regexp.MustCompile(`^\d+\. `).MatchString(strings.TrimSpace(line))
-		if matched {
-			if !inList {
-				result = append(result, "<ol>")
-				inList = true
-			}
-			text := regexp.MustCompile(`^\d+\. `).ReplaceAllString(strings.TrimSpace(line), "")
-			result = append(result, "<li>"+text+"</li>")
-		} else {
-			if inList {
-				result = append(result, "</ol>")
-				inList = false
-			}
-			result = append(result, line)
-		}
-	}
-	if inList {
-		result = append(result, "</ol>")
-	}
-
-	return strings.Join(result, "\n")
-}
-
-// ConvertConfluenceToMarkdown converts Confluence Storage Format to Markdown
-func ConvertConfluenceToMarkdown(confluence string) string {
-	content := confluence
-
-	// Headers
-	content = regexp.MustCompile(`<h1>(.+?)</h1>`).ReplaceAllString(content, "# $1")
-	content = regexp.MustCompile(`<h2>(.+?)</h2>`).ReplaceAllString(content, "## $1")
-	content = regexp.MustCompile(`<h3>(.+?)</h3>`).ReplaceAllString(content, "### $1")
-	content = regexp.MustCompile(`<h4>(.+?)</h4>`).ReplaceAllString(content, "#### $1")
-	content = regexp.MustCompile(`<h5>(.+?)</h5>`).ReplaceAllString(content, "##### $1")
-	content = regexp.MustCompile(`<h6>(.+?)</h6>`).ReplaceAllString(content, "###### $1")
-
-	// Bold
-	content = regexp.MustCompile(`<strong>(.+?)</strong>`).ReplaceAllString(content, "**$1**")
-
-	// Italic
-	content = regexp.MustCompile(`<em>(.+?)</em>`).ReplaceAllString(content, "*$1*")
-
-	// Code blocks
-	content = regexp.MustCompile(`(?s)<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">(.+?)</ac:parameter><ac:plain-text-body><!\[CDATA\[(.+?)\]\]></ac:plain-text-body></ac:structured-macro>`).ReplaceAllString(content, "```$1\n$2```")
-
-	// Inline code
-	content = regexp.MustCompile(`<code>(.+?)</code>`).ReplaceAllString(content, "`$1`")
-
-	// Links
-	content = regexp.MustCompile(`<a href="(.+?)">(.+?)</a>`).ReplaceAllString(content, "[$2]($1)")
-
-	// Lists
-	content = regexp.MustCompile(`<ul>`).ReplaceAllString(content, "")
-	content = regexp.MustCompile(`</ul>`).ReplaceAllString(content, "")
-	content = regexp.MustCompile(`<ol>`).ReplaceAllString(content, "")
-	content = regexp.MustCompile(`</ol>`).ReplaceAllString(content, "")
-	content = regexp.MustCompile(`<li>(.+?)</li>`).ReplaceAllString(content, "- $1")
-
-	// Blockquotes
-	content = regexp.MustCompile(`<blockquote><p>(.+?)</p></blockquote>`).ReplaceAllString(content, "> $1")
-
-	// Horizontal rule
-	content = regexp.MustCompile(`<hr/?>`).ReplaceAllString(content, "---")
-
-	// Paragraphs
-	content = regexp.MustCompile(`<p>(.+?)</p>`).ReplaceAllString(content, "$1\n")
-
-	// Clean up extra newlines
-	content = regexp.MustCompile(`\n{3,}`).ReplaceAllString(content, "\n\n")
-
-	return strings.TrimSpace(content)
+	return content
 }
