@@ -1,9 +1,6 @@
 # scribe.nvim
-> Push and pull your documentation pages directly from Neovim
-
- ** Current support for Confluence Cloud and Confluence Data 9.2 **
-
-A Neovim plugin that integrates with Atlassian Confluence, allowing you to create, update, and manage your documentation using Markdown - all from your terminal.
+** Push and pull your documentation pages directly from Neovim **
+> Current support for Confluence Cloud and Confluence Data 9.2 **
 
 ![Neovim Version](https://img.shields.io/badge/Neovim-0.8%2B-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -11,12 +8,11 @@ A Neovim plugin that integrates with Atlassian Confluence, allowing you to creat
 ## ✨ Features
 
 - 📤 **Push** new markdown files to Confluence with fuzzy finder to pick space/parent page
-- 📥 **Pull** existing pages from Confluence and convert them to mardown for easy edits and updates
+- 📥 **Pull** existing pages from Confluence and convert them to markdown for easy edits and updates
 - 🔄 **Update** existing pages with local changes
 - 🔍 **Browse** spaces and pages using Telescope
 - 📝 **Automatic conversion** between Markdown and Confluence Storage Format
 - 🏷️ **Frontmatter tracking** for syncing page metadata
-- 🚀 **Zero configuration** - works immediately after install
 
 ## 📦 Installation
 
@@ -55,7 +51,7 @@ use {
   },
         build = "cd cmd/scribe && go build -o ../../bin/scribe-cli .",
   config = function()
-    require("confluence").setup({})
+    require("scribe").setup({})
   end,
 }
 ```
@@ -64,26 +60,20 @@ use {
 
 ### 1. Get Your Confluence API Token
 
-1. Visit https://<your-atlasstian-domain>/manage-profile/security/api-tokens
+1. Visit https://your-domain/manage-profile/security/api-tokens
 2. Click **Create API token**
 3. Give it a label (e.g., "Neovim Plugin")
 4. Copy and save the token securely
 
 ### 2. Configure Environment Variables (Recommended)
 
-Add to your `~/.bashrc`, `~/.zshrc`, or shell config:
+Add to your `~/.bashrc`, `~/.zshrc`, or shell config and restart shell `source ~/.zshrc`, `source ~/.bashrc` :
 
 ```bash
 export SCRIBE_URL="https://your-domain.atlassian.net"
 export SCRIBE_USERNAME="your-email@example.com" # Not required by Confluence Data 9.2
 export SCRIBE_API_TOKEN="your-api-token-here"
-export SCRIBE_PROVIDER="conflunce" #or chalk, other providers coming soon 
-```
-
-Then in your Neovim config:
-
-```lua
-require("scribe").setup({})  -- Auto-reads from environment
+export SCRIBE_PROVIDER="confluence" #or chalk, other providers coming soon 
 ```
 
 ### 3. Verify Installation
@@ -101,10 +91,13 @@ require("scribe").setup({})  -- Auto-reads from environment
 | `:ScribePush` | Create a new page from current buffer |
 | `:ScribeUpdate` | Update existing page with local changes |
 | `:ScribePull` | Download a page as markdown |
-| `:ScribeSpaces` | Browse all Confluence spaces | Use C-n to check next page | Use C-a to add to favorites for quickly finding common pages |
-| `:ScribePages` | Browse pages in a space | Use CQL to query for pages by title | Pages are added to favorites/recents after selection for quick lookup |
+| `:ScribeSpaces` | Browse all Confluence spaces | Use C-n to check next page | 
+| `:ScribePages` | Browse pages in a space | Use CQL to query for pages by title |
 | `:ScribeNewDoc` | Create new document from default template | This ships as default and can be customized for your projects |
 | `:ScribeNewDocTemplate` | Create new document and select from different templates for other types of docs |
+
+When using Spaces and Pages each selection will store the file information as a favorite or recent for quick lookups
+Example location: `~/.local/share/nvim/lazy/`
 
 ### Workflow: Creating a New Page
 
@@ -128,7 +121,7 @@ require("scribe").setup({})  -- Auto-reads from environment
    - Feature 3
    ```
 
-2. **Run `:ConfluencePush`**
+2. **Run `:ScribePush`**
 
 3. **Select space** via Telescope fuzzy finder
 
@@ -158,11 +151,11 @@ confluence_title: My Documentation
 Updated content here...
 ```
 
-Just edit and run `:ConfluenceUpdate` to sync changes!
+Just edit and run `:ScribeUpdate` to sync changes!
 
 ### Workflow: Creating a New Document from Template
 
-1. **Run `:ConfluenceNewDoc`** (or `:ConfluenceNewDocTemplate` to select a template)
+1. **Run `:ScribeNewDoc`** (or `:ScribeNewDocTemplate` to select a template)
 
 2. **Enter document title**
 
@@ -170,13 +163,13 @@ Just edit and run `:ConfluenceUpdate` to sync changes!
 
 4. **Fill in the template** with your content
 
-5. **Save and push** using `:ConfluencePush`
+5. **Save and push** using `:ScribePush`
 
 The plugin includes a default template at `templates/default.md` that you can customize for your team. You can also create additional templates in the `templates/` directory.
 
 ### Workflow: Pulling a Page
 
-1. Run `:ConfluencePull`
+1. Run `:ScribePull`
 2. Select space
 3. Select page
 4. Page opens in new buffer with frontmatter
@@ -215,59 +208,6 @@ def fibonacci(n):
     return fibonacci(n-1) + fibonacci(n-2)
 ```
 
-**Features:**
-- Easy to use
-- Fast
-- Reliable
-```
-
-**Converts to Confluence Storage Format automatically!**
-
-## ⚙️ Configuration
-
-### Full Configuration Options
-
-```lua
-require("confluence").setup({
-  -- Confluence instance URL
-  confluence_url = "https://your-domain.atlassian.net",
-  
-  -- Your Confluence username (usually your email)
-  confluence_username = "your-email@example.com",
-  
-  -- API token from Atlassian
-  confluence_api_token = "your-api-token",
-  
-  -- Path to confluence-cli binary (auto-detected by default)
-  confluence_cli_path = nil,
-  
-  -- Path to custom template file (optional, defaults to templates/default.md)
-  template_path = nil,
-})
-```
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────┐
-│  Neovim (Lua)       │  User interface
-│  - Commands         │  Telescope integration
-│  - Fuzzy finder     │
-└──────────┬──────────┘
-           │
-┌──────────▼──────────┐
-│  Go CLI Binary      │  Confluence API client
-│  - REST API         │  Markdown converter
-│  - Auth handling    │
-└──────────┬──────────┘
-           │
-┌──────────▼──────────┐
-│  Confluence Cloud   │
-│  - Pages            │
-│  - Spaces           │
-└─────────────────────┘
-```
-
 ## 🔒 Security
 
 **IMPORTANT**: This plugin handles sensitive credentials (API tokens). Follow these security best practices:
@@ -278,22 +218,14 @@ require("confluence").setup({
 - ✅ **Use HTTPS only** (enforced by the plugin)
 - ✅ **Review file permissions** on config files containing credentials
 
-The plugin enforces HTTPS connections and validates inputs to prevent common attacks. See [SECURITY.md](SECURITY.md) for detailed security information.
-
-### Credential Management
-
-⚠️ **Warning**: If you've accidentally committed credentials, immediately:
-1. Rotate your API token
-2. Remove credentials from git history
-3. Add sensitive files to `.gitignore`
-
+The plugin enforces HTTPS connections and validates inputs to prevent common attacks. 
 ## 🔍 Troubleshooting
 
 ### Binary not found
 
 Run the health check:
 ```vim
-:checkhealth confluence
+:checkhealth scribe
 ```
 
 ### Authentication errors
