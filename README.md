@@ -86,8 +86,8 @@ export SCRIBE_PROVIDER="confluence" #or chalk, other providers coming soon
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
+| Command | Description | Extra |
+|---------|-------------|--------|
 | `:ScribePush` | Create a new page from current buffer |
 | `:ScribeUpdate` | Update existing page with local changes |
 | `:ScribePull` | Download a page as markdown |
