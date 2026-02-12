@@ -38,8 +38,10 @@ func main() {
 	listSpacesCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all spaces",
+		Long:  "List all spaces or filter by key/name using --query flag",
 		RunE:  runListSpaces,
 	}
+	listSpacesCmd.Flags().StringVar(&query, "query", "", "Filter spaces by key or name")
 	listSpacesCmd.Flags().IntVar(&limit, "limit", 100, "Limit the number of results")
 	listSpacesCmd.Flags().IntVar(&offset, "offset", 0, "Starting offset for results")
 
@@ -108,6 +110,7 @@ func runListSpaces(cmd *cobra.Command, args []string) error {
 	opts := &ListOptions{
 		Limit:  limit,
 		Offset: offset,
+		Query:  strings.TrimSpace(query),
 	}
 	spaces, err := client.ListSpaces(opts)
 	if err != nil {

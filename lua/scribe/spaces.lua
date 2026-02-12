@@ -14,15 +14,24 @@ local function build_favorites_results()
 		data = { favorites = {}, recent = {} }
 	end
 	local function is_real_space(space)
-		if not space or type(space) ~= "table" then return false end
-		if space.action == "search_all" or space.action == "search" then return false end
+		if not space or type(space) ~= "table" then
+			return false
+		end
+		if space.action == "search_all" or space.action == "search" then
+			return false
+		end
 		return space.key and space.key ~= ""
 	end
 	local function add_space(space)
-		if not is_real_space(space) then return end
+		if not is_real_space(space) then
+			return
+		end
 		local exists = false
 		for _, res in ipairs(results) do
-			if res.key == space.key then exists = true break end
+			if res.key == space.key then
+				exists = true
+				break
+			end
 		end
 		if not exists then
 			table.insert(results, space)
@@ -65,21 +74,22 @@ function M.select_space_with_favorites(callback)
 					if not entry or type(entry) ~= "table" then
 						return { value = {}, display = "?", ordinal = "?" }
 					end
-					local name = entry.name or "?"
-					local key = entry.key or ""
-					if key ~= "" then
+					if entry.action == "search_all" then
 						return {
 							value = entry,
-							display = "⭐ " .. name .. " (" .. key .. ")",
-							ordinal = name .. " " .. key,
-						}
-					else
-						return {
-							value = entry,
-							display = name,
+							display = entry.name,
 							ordinal = "zzzz",
 						}
 					end
+
+					local name = entry.name or "?"
+					local key = entry.key or ""
+					local icone = entry.is_fav and "⭐ " or "🕒 "
+					return {
+						value = entry,
+						display = icon .. name .. "(" .. key .. ")",
+						ordinal = name .. " " .. key,
+					}
 				end,
 			}),
 			sorter = conf.generic_sorter({}),
@@ -91,7 +101,7 @@ function M.select_space_with_favorites(callback)
 						return
 					end
 					if selection.value.action == "search_all" then
-						M.search_all_spaces(0, callback)
+						M.prompt_then_search_spaces(callback)
 					elseif selection.value.key then
 						callback(selection.value)
 					end
@@ -102,6 +112,15 @@ function M.select_space_with_favorites(callback)
 		:find()
 end
 
+function M.prompt_then_search_spaces(on_select)
+	local query = vim.fn.input("Space Name/Key (Enter = all): ")
+	if query == nil then
+		return
+	end -- Escaped
+	query = vim.trim(query)
+	M.search_all_spaces(0, query, on_select)
+end
+
 function M.list_spaces()
 	M.select_space_with_favorites(function(space)
 		require("scribe.pages").show_pages_for_space(space.key)
@@ -109,92 +128,104 @@ function M.list_spaces()
 end
 
 -- offset: optional, for pagination. on_select: optional; when user picks a space, call on_select(space). If nil, default is show_pages_for_space.
-function M.search_all_spaces(offset, on_select)
+function M.search_all_spaces(offset, query, on_select)
 	offset = offset or 0
-	local limit = 50
+	query = query or ""
+	local limit = 100
 
 	vim.notify(string.format("Fetching spaces %d-%d...", offset, offset + limit), vim.log.levels.INFO)
 
-	utils.execute_cli(
-		{ "spaces", "list", "--limit", tostring(limit), "--offset", tostring(offset) },
-		function(result, err)
-			if err then
-				vim.notify("Failed to list spaces: " .. err, vim.log.levels.ERROR)
-				return
-			end
+	local args = { "spaces", "list", "--limit", tostring(limit), "--offset", tostring(offset) }
+	if query ~= "" then
+		table.insert(args, "--query")
+		table.insert(args, query)
+	end
 
-			local entries = result.results or result
-			if type(entries) ~= "table" then
-				entries = {}
-			end
+	utils.execute_cli(args, function(result, err)
+		if err then
+			vim.notify("Failed to list spaces: " .. err, vim.log.levels.ERROR)
+			return
+		end
 
-			if #entries >= limit then
-				table.insert(entries, {
-					name = "➡️  Next Page...",
-					action = "next_page",
-					type = "system",
-					ordinal = "zzzz",
-				})
-			end
+		local entries = result.results or result
+		if type(entries) ~= "table" then
+			entries = {}
+		end
+		if #entries == 0 then
+			vim.notify("No Spaces found matching: " .. query, vim.log.levels.WARN)
+			return
+		end
 
-			pickers
-				.new({}, {
-					prompt_title = string.format("All Spaces (Offset: %d)", offset),
-					finder = finders.new_table({
-						results = entries,
-						entry_maker = function(entry)
-							if not entry or type(entry) ~= "table" then
-								return { value = {}, display = "?", ordinal = "?" }
-							end
-							if entry.action == "next_page" then
-								return {
-									value = entry,
-									display = entry.name or "➡️  Next Page...",
-									ordinal = "zzzz",
-								}
-							end
-							local name = entry.name or "?"
-							local key = entry.key or "?"
+		if #entries >= limit then
+			table.insert(entries, {
+				name = "➡️  Next Page...",
+				action = "next_page",
+				type = "system",
+				ordinal = "zzzz",
+			})
+		end
+		local current_offset = offset
+		local current_query = query
+
+		pickers
+			.new({}, {
+				prompt_title = query == " " and "All Spaces" or ("Spaces matching: " .. query),
+				finder = finders.new_table({
+					results = entries,
+					entry_maker = function(entry)
+						if not entry or type(entry) ~= "table" then
+							return { value = {}, display = "?", ordinal = "?" }
+						end
+						if entry.action == "next_page" then
 							return {
 								value = entry,
-								display = string.format("%s (%s) - %s", name, key, entry.type or "Space"),
-								ordinal = name .. " " .. key,
+								display = entry.name or "➡️  Next Page...",
+								ordinal = "zzzz",
 							}
-						end,
-					}),
-					sorter = conf.generic_sorter({}),
-					attach_mappings = function(prompt_bufnr, map)
-						actions.select_default:replace(function()
-							local selection = action_state.get_selected_entry()
-							actions.close(prompt_bufnr)
-							if not selection or not selection.value then
-								return
-							end
-							if selection.value.action == "next_page" then
-								M.search_all_spaces(offset + limit, on_select)
-							elseif selection.value.key then
-								utils.save_favorites(selection.value)
-								if on_select then
-									on_select(selection.value)
-								else
-									require("scribe.pages").show_pages_for_space(selection.value.key)
-								end
-							end
-						end)
-
-						map("i", "<A-a>", function()
-							local selection = action_state.get_selected_entry()
-							if selection and selection.value and selection.value.key then
-								utils.save_favorites(selection.value)
-							end
-						end)
-
-						return true
+						end
+						local name = entry.name or "?"
+						local key = entry.key or "?"
+						local type_label = entry.type == "personal" and " (Personal)" or ""
+						return {
+							value = entry,
+							display = string.format("%s (%s) - %s", name, key, type_label),
+							ordinal = name .. " " .. key,
+						}
 					end,
-				})
-				:find()
-		end
-	)
+				}),
+				sorter = conf.generic_sorter({}),
+				attach_mappings = function(prompt_bufnr, map)
+					actions.select_default:replace(function()
+						local selection = action_state.get_selected_entry()
+						actions.close(prompt_bufnr)
+						if not selection or not selection.value then
+							return
+						end
+						if selection.value.action == "next_page" then
+							M.search_all_spaces(current_offset + limit, current_query, on_select)
+						elseif selection.value.key then
+							utils.save_favorites(selection.value)
+							if on_select then
+								on_select(selection.value)
+							else
+								require("scribe.pages").show_pages_for_space(selection.value.key)
+							end
+						end
+					end)
+
+					map("i", "<A-a>", function()
+						local selection = action_state.get_selected_entry()
+						if selection and selection.value and selection.value.key then
+							utils.save_favorites(selection.value)
+							vim.notify("Added to recent spaces", vim.log.levels.INFO)
+						end
+					end)
+
+					return true
+				end,
+			})
+			:find()
+	end)
 end
 
 return M
