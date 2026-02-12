@@ -141,7 +141,7 @@ func (c *ConfluenceClient) doRequest(method, path string, body interface{}) ([]b
 }
 
 func (c *ConfluenceClient) ListSpaces(opts *ListOptions) ([]Space, error) {
-	limit := 20
+	limit := 100
 	offset := 0
 
 	if opts != nil {
@@ -151,8 +151,11 @@ func (c *ConfluenceClient) ListSpaces(opts *ListOptions) ([]Space, error) {
 		if opts.Offset > 0 {
 			offset = opts.Offset
 		}
+		if opts.Query != "" {
+			query = fmt.Sprintf("&spaceKey=%s", url.QueryEscape(opts.Query))
+		}
 	}
-	endpoint := fmt.Sprintf("/rest/api/space?limit=%d&start=%d", limit, offset)
+	endpoint := fmt.Sprintf("/rest/api/space?limit=%d&start=%d%s", limit, offset, query)
 
 	respBody, err := c.doRequest("GET", endpoint, nil)
 	if err != nil {
