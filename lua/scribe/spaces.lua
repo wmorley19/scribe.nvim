@@ -84,7 +84,7 @@ function M.select_space_with_favorites(callback)
 
 					local name = entry.name or "?"
 					local key = entry.key or ""
-					local icone = entry.is_fav and "⭐ " or "🕒 "
+					local icon = entry.is_fav and "⭐ " or "🕒 "
 					return {
 						value = entry,
 						display = icon .. name .. "(" .. key .. ")",
